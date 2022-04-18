@@ -1107,7 +1107,7 @@
     *
     * @returns The data popped off the queue if it was full.
     */
-   write(value: string | number): null | string | number;
+   write(value: any): null | any;
  
    /**
     * Attempt to write data to the port.
@@ -1116,7 +1116,7 @@
     *
     * @returns True if the data was added to the port, false if the port was full
     */
-   tryWrite(value: string | number): boolean;
+   tryWrite(value: any): boolean;
  
    /**
     * Shift an element out of the port.
@@ -1127,7 +1127,7 @@
     * If the port is empty, then the string “NULL PORT DATA” will be returned.
     * @returns the data read.
     */
-   read(): string | number;
+   read(): any;
  
    /**
     * Retrieve the first element from the port without removing it.
@@ -1139,7 +1139,7 @@
     * the port is empty, the string “NULL PORT DATA” will be returned.
     * @returns the data read
     */
-   peek(): string | number;
+   peek(): any;
  
    /**
     * Check if the port is full.

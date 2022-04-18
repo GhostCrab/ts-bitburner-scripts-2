@@ -1,26 +1,14 @@
-import { NS } from "@ns";
-import { allHosts, HACKJS, GROWJS, WEAKENJS, llog } from "/lib/util";
+import { NS, Player } from "@ns";
+import { getServerService } from "/lib/service_helpers";
+import { HACKJS, GROWJS, WEAKENJS, llog } from "/lib/util";
+import { ServerService, Server, ScriptExecution } from "/services/server";
 
 const HOME_RESERVE_RAM = 8;
 const HACK_RAM = 1.7;
 const GROW_RAM = 1.75;
 const WEAKEN_RAM = 1.75;
 
-function getHostAvailableRam(ns: NS, hostnames: string[]): number {
-    return hostnames.reduce(
-        (tally, hostname) =>
-            tally +
-            (ns.getHackingLevel() >= ns.getServerRequiredHackingLevel(hostname)
-                ? Math.max(
-                      0,
-                      ns.getServerMaxRam(hostname) -
-                          ns.getServerUsedRam(hostname) -
-                          (hostname === "home" ? HOME_RESERVE_RAM : 0)
-                  )
-                : 0),
-        0
-    );
-}
+const SCRIPT_GAP = 400;
 
 type Batch = {
     hackThreads: number;
@@ -29,21 +17,12 @@ type Batch = {
     weakenGrowThreads: number;
 };
 
-//for (const [i, value] of myArray.entries()) {
-
-function hostRamBlocks(ns: NS, hostnames: string[]): number[] {
-    const blocks: number[] = [];
-    for (const hostname of hostnames) {
-        let blockSize = ns.getServerMaxRam(hostname);
-        if (hostname === "home") blockSize = Math.max(0, ns.getServerMaxRam(hostname) - HOME_RESERVE_RAM);
-        if (blockSize > 0) blocks.push(blockSize);
-    }
-    return blocks;
-}
-
-function testAllocateBatches(ns: NS, hostnames: string[], batches: Batch[]): boolean {
+function testAllocateBatches(ns: NS, servers: Server[], batches: Batch[]): boolean {
     // all hack threads and grow threads need to be allocated in a block, weaken threads can be spread out
-    const blocks = hostRamBlocks(ns, hostnames).sort((a, b) => a - b);
+    const blocks = servers
+        .map((a) => a.availableRam())
+        .filter((a) => a <= 0)
+        .sort((a, b) => a - b);
 
     // attempt to reserve hack threads
     for (const batch of batches) {
@@ -96,12 +75,12 @@ function testAllocateBatches(ns: NS, hostnames: string[], batches: Batch[]): boo
 
 function testAllocateThreads(
     ns: NS,
-    hostnames: string[],
+    servers: Server[],
     hackThreads: number,
     growThreads: number,
     weakenThreads: number
 ): boolean {
-    return testAllocateBatches(ns, hostnames, [
+    return testAllocateBatches(ns, servers, [
         {
             hackThreads: hackThreads,
             growThreads: growThreads,
@@ -111,72 +90,87 @@ function testAllocateThreads(
     ]);
 }
 
+let options;
+const argsSchema: [string, string | number | boolean | string[]][] = [
+    ["target", "n00dles"],
+    ["reserve", 16],
+];
+
+// eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types, @typescript-eslint/no-explicit-any
+export function autocomplete(data: any, args: string[]): string[] {
+    data.flags(argsSchema);
+    const lastFlag = args.length > 1 ? args[args.length - 2] : "";
+    if (["--target"].includes(lastFlag)) return data.servers;
+    if (["--reserve"].includes(lastFlag)) return ["16", "32", "64", "128"];
+    return ["--target", "--reserve"];
+}
+
+let serverService: ServerService;
+
 export async function main(ns: NS): Promise<void> {
     ns.disableLog("sleep");
     ns.tail();
 
-    const flags = ns.flags([["target", "n00dles"]]);
+    let targetServer: Server;
 
-    const targetHostname = flags["target"];
-
-    if (!ns.serverExists(targetHostname)) {
-        ns.tprintf("ERROR: Cannot hack %s: Server does not exist", targetHostname);
+    try {
+        options = ns.flags(argsSchema);
+        serverService = getServerService(ns);
+        targetServer = serverService.loadServer(options.target);
+    } catch (e) {
+        ns.tprintf("ERROR: %s", e);
         return;
     }
 
-    if (!ns.hasRootAccess(targetHostname)) {
-        ns.tprintf("ERROR: Cannot hack %s: No root access", targetHostname);
+    if (!targetServer.canRunScripts()) {
+        ns.tprintf("ERROR: Cannot hack %s: No root access", targetServer.hostname);
         return;
     }
 
-    if (ns.getHackingLevel() < ns.getServerRequiredHackingLevel(targetHostname)) {
+    if (!targetServer.canBeHacked(ns.getHackingLevel())) {
         ns.tprintf(
             "ERROR: Cannot hack %s: Insufficient hacking experience %d < %d",
-            targetHostname,
+            targetServer.hostname,
             ns.getHackingLevel(),
-            ns.getServerRequiredHackingLevel(targetHostname)
+            targetServer.requiredHackingSkill
         );
         return;
     }
 
-    // collect all available ram
-    const allHostnames = allHosts(ns);
-    const ownedHostnames = allHostnames.filter((a) => ns.hasRootAccess(a));
-
-    // trasfer hacking scripts to the hosts
-    for (const hostname of ownedHostnames.filter((a) => a !== "home")) {
-        await ns.scp(HACKJS, hostname);
-        await ns.scp(GROWJS, hostname);
-        await ns.scp(WEAKENJS, hostname);
+    if (isNaN(options.reserve) || options.reserve < 0) {
+        ns.tprintf("ERROR: --reserve must be a number > 0 (%s)", options.reserve);
+        return;
     }
 
+    const servers = serverService
+        .getScriptableServers(options.reserve)
+        .sort((a, b) => a.availableRam() - b.availableRam());
+    for (const server of servers) await server.initScripts([HACKJS, GROWJS, WEAKENJS]);
+
+    let simPlayer: Player | undefined;
+
     const hackingLevel = ns.getHackingLevel();
-    const hackTime = ns.getHackTime(targetHostname, hackingLevel);
-    const growTime = ns.getGrowTime(targetHostname, hackingLevel);
-    const weakenTime = ns.getWeakenTime(targetHostname, hackingLevel);
+    const hackTime = targetServer.hackTime(hackingLevel, simPlayer);
+    const growTime = targetServer.growTime(hackingLevel, simPlayer);
+    const weakenTime = targetServer.weakenTime(hackingLevel, simPlayer);
 
-    const minSecurity = ns.getServerMinSecurityLevel(targetHostname);
-    const weakenPerThread = 0.05; //ns.weakenAnalyze(1);
-
-    let money = ns.getServerMoneyAvailable(targetHostname);
-    const maxMoney = ns.getServerMaxMoney(targetHostname);
+    const weakenPerThread = targetServer.weakenAnalyze(1);
 
     // detect if we need to initialize the server
-    while (money < maxMoney) {
-        const security = ns.getServerSecurityLevel(targetHostname);
-        const initialSecurityDiff = security - minSecurity;
-        let growThreads = Math.floor(getHostAvailableRam(ns, ownedHostnames) / GROW_RAM);
+    while (targetServer.moneyAvailable < targetServer.moneyMax) {
+        targetServer.reload();
+        const initialSecurityDiff = targetServer.hackDifficulty - targetServer.minDifficulty;
+        let growThreads = servers.reduce((tally, server) => tally + server.threadsAvailable(GROW_RAM), 0);
         let weakenGrowThreads = 0;
 
-        const growMult = Math.max(maxMoney / money, 1);
-        const growThreadsNeeded = ns.growthAnalyze(targetHostname, growMult);
+        const growThreadsNeeded = targetServer.growthAnalyze(simPlayer);
         growThreads = Math.min(growThreads, growThreadsNeeded);
 
         while (growThreads > 0) {
-            const growSecurityIncrease = growThreads * 0.004;
+            const growSecurityIncrease = targetServer.growthAnalyzeSecurity(growThreads);
             weakenGrowThreads = Math.ceil((growSecurityIncrease + initialSecurityDiff) / weakenPerThread);
 
-            if (testAllocateThreads(ns, ownedHostnames, 0, growThreads, weakenGrowThreads)) break;
+            if (testAllocateThreads(ns, servers, 0, growThreads, weakenGrowThreads)) break;
 
             growThreads--;
         }
@@ -184,28 +178,36 @@ export async function main(ns: NS): Promise<void> {
         if (growThreads === 0) {
             llog(ns, "Unable to allocate primary grow threads, starting with a full weaken");
 
-            let waitPID = 0;
-            for (const hostname of ownedHostnames) {
-                let availableRam = ns.getServerMaxRam(hostname) - ns.getServerUsedRam(hostname);
-                if (hostname === "home") availableRam = Math.max(0, availableRam - HOME_RESERVE_RAM);
-                const threads = Math.floor(availableRam / ns.getScriptRam(WEAKENJS));
+            const fullWeakenThreads = Math.ceil(
+                (targetServer.hackDifficulty - targetServer.minDifficulty) / weakenPerThread
+            );
+            let weakenThreadsNeeded = fullWeakenThreads;
+            for (const server of servers) {
+                const threads = Math.min(weakenThreadsNeeded, server.threadsAvailable(WEAKEN_RAM));
                 if (threads <= 0) continue;
-                waitPID = ns.exec(
-                    WEAKENJS,
-                    hostname,
-                    threads,
+                const result = server.reserveScript(WEAKENJS, WEAKEN_RAM, threads, [
                     "--target",
-                    targetHostname,
+                    targetServer.hostname,
                     "--hackLvlTiming",
-                    ns.getHackingLevel()
-                );
+                    ns.getHackingLevel(),
+                    "--batchID",
+                    0,
+                ]);
+
+                if (!result) throw new Error("server.reserveScript() failed after sanity check");
+
+                weakenThreadsNeeded -= threads;
+                if (weakenThreadsNeeded === 0) break;
             }
 
-            while (ns.getRunningScript(waitPID) !== null) {
-                await ns.sleep(100);
-            }
-            // wait a little bit longer to make sure everything else finished too
-            await ns.sleep(500);
+            if (weakenThreadsNeeded > 0)
+                llog("Only able to allocate %d out of %d weaken threads", fullWeakenThreads - weakenThreadsNeeded, fullWeakenThreads);
+            else
+                llog("Allocated %d weaken threads", fullWeakenThreads);
+
+            const execs: ScriptExecution[] = [];
+            servers.map((a) => execs.push(...a.reservedScripts));
+            await executeAndWait(ns, execs);
         } else {
             if (growThreads < growThreadsNeeded)
                 llog(ns, "Only allocating %d out of the %d needed grow threads", growThreads, growThreadsNeeded);
@@ -274,4 +276,42 @@ export async function main(ns: NS): Promise<void> {
     // if after 1 grow thread is calculated, the end state is not min security, try only doing weaken threads
 
     // run the max number of weaken threads until security in minimum
+}
+
+async function executeAndWait(ns: NS, execs: ScriptExecution[]): Promise<void> {
+    execs.sort((a, b) => a.offset - b.offset);
+    const startTime = new Date().getTime();
+    let waitPID = 0;
+    while (true) {
+        const exec = execs.shift();
+        if (!exec) break;
+        while (true) {
+            const curOffset = new Date().getTime() - startTime;
+            const offsetDiff = curOffset - exec.offset;
+            if (offsetDiff < 0) {
+                await ns.sleep(20);
+                continue;
+            }
+
+            if (offsetDiff > SCRIPT_GAP / 2) {
+                ns.tprintf(
+                    "WARNING: Script execution offset off by %d (> minimum difference of %d)",
+                    offsetDiff,
+                    SCRIPT_GAP / 2
+                );
+
+                execs = execs.filter((a) => a.batchID !== exec.batchID);
+                continue;
+            }
+
+            const pid = ns.exec(exec.filename, exec.hostname, exec.threads, ...exec.args);
+
+            // Set waitPID to the last weaken call (assumed to be the last call to finish of the last batch)
+            if (exec.filename === WEAKENJS) waitPID = pid;
+        }
+    }
+
+    while (ns.getRunningScript(waitPID) !== null) {
+        await ns.sleep(100);
+    }
 }

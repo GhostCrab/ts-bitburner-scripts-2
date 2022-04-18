@@ -1,11 +1,18 @@
 import { NS } from "@ns";
-import { allHosts, softenServer } from "/lib/util";
+import { getServerService } from "/lib/service_helpers";
+import { ServerService } from "/services/server";
+
+let serverService: ServerService;
 
 export async function main(ns: NS): Promise<void> {
-    const hosts = allHosts(ns);
-    ns.tprintf(`${hosts }`);
-
-    for (const hostname of hosts) {
-        softenServer(ns, hostname);
+    try {
+        serverService = getServerService(ns);
+    } catch (e) {
+        ns.tprintf("ERROR: %s", e);
+        return;
     }
+    const server = serverService.loadServer("n00dles2");
+
+    console.log(server)
+   
 }

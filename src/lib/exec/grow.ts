@@ -6,6 +6,7 @@ export async function main(ns: NS): Promise<void> {
         ["hackLvlTiming", 1],
         ["batchID", 0],
         ["offset", 0],
+        ["uid", 0],
     ]);
     await ns.grow(flags["target"], {
         hackOverrideTiming: flags["hackLvlTiming"],

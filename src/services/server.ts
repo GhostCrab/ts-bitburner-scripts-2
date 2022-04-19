@@ -3,6 +3,8 @@
 import { NS, Server as NSServer, Player } from "@ns";
 import { allHosts } from "/lib/util";
 
+let uid = 0;
+
 enum CodingContractRewardType {
     FactionReputation,
     FactionReputationAll,
@@ -278,9 +280,9 @@ export class Server implements NSServer {
                 hostname: this.hostname,
                 ram: totalRam,
                 threads: threads,
-                args: args,
+                args: args.concat("--uid", uid++),
                 offset: offset,
-                batchID: batchID,
+                batchID: batchID
             });
             return true;
         }

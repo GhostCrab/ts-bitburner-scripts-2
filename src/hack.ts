@@ -28,7 +28,7 @@ function testAllocateBatches(ns: NS, servers: Server[], batches: Batch[]): boole
     // all hack threads and grow threads need to be allocated in a block, weaken threads can be spread out
     const blocks = servers
         .map((a) => a.availableRam())
-        .filter((a) => a <= 0)
+        .filter((a) => a > 0)
         .sort((a, b) => a - b);
 
     // attempt to reserve hack threads
@@ -156,6 +156,7 @@ function allocateBatches(ns: NS, targetServer: Server, servers: Server[], simPla
             const growThreadsNeeded = targetServer.growthAmount(simPlayer);
             growThreads = Math.min(growThreads, growThreadsNeeded);
 
+            llog(ns, "%d grow threads", growThreads);
             while (growThreads > 0) {
                 const growSecurityIncrease = targetServer.growthAmountSecurity(growThreads);
                 weakenGrowThreads = Math.ceil((growSecurityIncrease + securityDiff) / weakenPerThread);
@@ -231,9 +232,9 @@ function allocateBatches(ns: NS, targetServer: Server, servers: Server[], simPla
         } else {
             // calculate how many HWGW batches we can fit
         }
-
-        return batchID;
     }
+
+    return batchID;
 }
 
 export async function main(ns: NS): Promise<void> {
@@ -241,6 +242,7 @@ export async function main(ns: NS): Promise<void> {
     ns.disableLog("sleep");
     ns.disableLog("scan");
     ns.disableLog("getHackingLevel");
+    ns.disableLog("ALL");
     ns.tail();
 
     let targetServer: Server;
@@ -308,18 +310,15 @@ export async function main(ns: NS): Promise<void> {
             case HACKJS:
                 updateScriptExecutionArg(exec, "--hackLvlTiming", hackLevel);
                 exec.offset = (exec.batchID * batchSpacer) + hackOffset;
-                exec.args.push("--offset", exec.offset);
                 break;
             case GROWJS:
                 updateScriptExecutionArg(exec, "--hackLvlTiming", growLevel);
                 exec.offset = (exec.batchID * batchSpacer) + growOffset;
-                exec.args.push("--offset", exec.offset);
                 break;
             case WEAKENJS:
                 updateScriptExecutionArg(exec, "--hackLvlTiming", weakenLevel);
                 if (exec.offset) exec.offset = (exec.batchID * batchSpacer) + weakenGrowOffset;
                 else exec.offset = (exec.batchID * batchSpacer) + weakenHackOffset;
-                exec.args.push("--offset", exec.offset);
                 break;
         }
     }

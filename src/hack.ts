@@ -1,14 +1,21 @@
 import { NS, Player } from "@ns";
-import { getServerService } from "/lib/service_helpers";
 import { HACKJS, GROWJS, WEAKENJS, llog } from "/lib/util";
-import { ServerService, Server, ScriptExecution } from "/services/server";
+import { ServerService, Server, ScriptExecution, Argument } from "/services/server";
 
-const HOME_RESERVE_RAM = 8;
+const TSPACER = 400;
+
+const HOME_RESERVE_RAM = 32;
 const HACK_RAM = 1.7;
 const GROW_RAM = 1.75;
 const WEAKEN_RAM = 1.75;
 
 const SCRIPT_GAP = 400;
+
+function updateScriptExecutionArg(exec: ScriptExecution, arg: string, val: Argument): void {
+    const argIndex = exec.args.findIndex((a) => a === arg);
+    if (argIndex !== -1 && argIndex + 1 < exec.args.length) exec.args[argIndex + 1] = val;
+    return;
+}
 
 type Batch = {
     hackThreads: number;
@@ -93,7 +100,7 @@ function testAllocateThreads(
 let options;
 const argsSchema: [string, string | number | boolean | string[]][] = [
     ["target", "n00dles"],
-    ["reserve", 16],
+    ["reserve", HOME_RESERVE_RAM],
 ];
 
 // eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types, @typescript-eslint/no-explicit-any
@@ -107,15 +114,140 @@ export function autocomplete(data: any, args: string[]): string[] {
 
 let serverService: ServerService;
 
+// allocate a batch
+// check to see if server is initialized, if not, reserve a GW batch
+// else figure out optimal batch size for number of batches left to allocate
+// and reserve all of those
+
+function allocateBatches(ns: NS, targetServer: Server, servers: Server[], simPlayer?: Player): number {
+    const batchSpacer = TSPACER * 4;
+    const weakenPerThread = targetServer.weakenAmount(1);
+
+    const hackTimeLong = targetServer.hackTime(Number.MIN_VALUE, simPlayer);
+    const batchCountMax = Math.max(Math.floor(hackTimeLong / batchSpacer), 1);
+    llog(ns, "Maximum Batches: %d", batchCountMax);
+
+    let batchID = 0;
+    while (true) {
+        // If we're maxed out on batches, break
+        if (batchID >= batchCountMax) break;
+
+        // is server initialized
+        const securityDiff = targetServer.hackDifficulty - targetServer.minDifficulty;
+        const moneyDiff = targetServer.moneyMax - targetServer.moneyAvailable;
+
+        if (securityDiff > 0 || moneyDiff > 0) {
+            llog(ns, "Allocating Primary Thread (BatchID %d)", batchID);
+    
+            // allocate primary thread
+            const bigBlock = servers
+                .map((a) => a.availableRam())
+                .filter((a) => a > 0)
+                .sort((a, b) => b - a)[0];
+
+            llog(ns, "Big Block %d", bigBlock);
+
+            // We've run out of available ram, break out and execute reserved scripts
+            if (bigBlock < GROW_RAM) break;
+
+            let growThreads = Math.floor(bigBlock / GROW_RAM);
+            let weakenGrowThreads = 0;
+
+            const growThreadsNeeded = targetServer.growthAmount(simPlayer);
+            growThreads = Math.min(growThreads, growThreadsNeeded);
+
+            while (growThreads > 0) {
+                const growSecurityIncrease = targetServer.growthAmountSecurity(growThreads);
+                weakenGrowThreads = Math.ceil((growSecurityIncrease + securityDiff) / weakenPerThread);
+
+                if (testAllocateThreads(ns, servers, 0, growThreads, weakenGrowThreads)) break;
+
+                growThreads--;
+            }
+
+            llog(ns, "%d grow threads", growThreads);
+
+            if (growThreads === 0) {
+                for (const server of servers) {
+                    const threads = server.threadsAvailable(WEAKEN_RAM);
+                    if (threads <= 0) continue;
+                    server.reserveScript(WEAKENJS, WEAKEN_RAM, threads, [
+                        "--target",
+                        targetServer.hostname,
+                        "--hackLvlTiming",
+                        ns.getHackingLevel(),
+                        "--batchID",
+                        batchID,
+                    ]);
+                }
+
+                // Full weaken loop indicates we are done allocating batches
+                break;
+            } else {
+                if (growThreads < growThreadsNeeded)
+                    llog(ns, "Only allocating %d out of the %d needed grow threads", growThreads, growThreadsNeeded);
+                llog(ns, "Kicking off %d primary grow threads (%d weaken threads)", growThreads, weakenGrowThreads);
+
+                // reserve grows first, then weakens
+                for (const server of servers) {
+                    if (server.threadsAvailable(GROW_RAM) < growThreads) continue; // exectue grows as a block
+                    server.reserveScript(GROWJS, GROW_RAM, growThreads, [
+                        "--target",
+                        targetServer.hostname,
+                        "--hackLvlTiming",
+                        ns.getHackingLevel(),
+                        "--batchID",
+                        batchID
+                    ]);
+
+                    break;
+                }
+
+                let weakenGrowThreadsRemaining = weakenGrowThreads;
+                for (const server of servers) {
+                    const threads = Math.min(weakenGrowThreadsRemaining, server.threadsAvailable(WEAKEN_RAM));
+                    if (threads <= 0) continue;
+                    server.reserveScript(WEAKENJS, WEAKEN_RAM, threads, [
+                        "--target",
+                        targetServer.hostname,
+                        "--hackLvlTiming",
+                        ns.getHackingLevel(),
+                        "--batchID",
+                        batchID,
+                    ]);
+
+                    weakenGrowThreadsRemaining -= threads;
+                    if (weakenGrowThreadsRemaining === 0) break;
+                }
+            }
+
+            // if this isnt a sim, or we are unable to simulate because we dont have formulas.exe, keep looping until we run
+            // out of available threads, just assign everything to batchID 0.
+            if (!simPlayer) continue;
+
+            targetServer.simGrow(growThreads, weakenGrowThreads, simPlayer);
+            batchID++;
+            continue;
+        } else {
+            // calculate how many HWGW batches we can fit
+        }
+
+        return batchID;
+    }
+}
+
 export async function main(ns: NS): Promise<void> {
+    ns.disableLog("disableLog");
     ns.disableLog("sleep");
+    ns.disableLog("scan");
+    ns.disableLog("getHackingLevel");
     ns.tail();
 
     let targetServer: Server;
 
     try {
         options = ns.flags(argsSchema);
-        serverService = getServerService(ns);
+        serverService = new ServerService(ns);
         targetServer = serverService.loadServer(options.target);
     } catch (e) {
         ns.tprintf("ERROR: %s", e);
@@ -142,140 +274,57 @@ export async function main(ns: NS): Promise<void> {
         return;
     }
 
+    await doSoften(ns);
+
     const servers = serverService
         .getScriptableServers(options.reserve)
         .sort((a, b) => a.availableRam() - b.availableRam());
-    for (const server of servers) await server.initScripts([HACKJS, GROWJS, WEAKENJS]);
 
     let simPlayer: Player | undefined;
 
-    const hackingLevel = ns.getHackingLevel();
-    const hackTime = targetServer.hackTime(hackingLevel, simPlayer);
-    const growTime = targetServer.growTime(hackingLevel, simPlayer);
-    const weakenTime = targetServer.weakenTime(hackingLevel, simPlayer);
+    //const batchCount = allocateBatches(ns, targetServer, servers, simPlayer);
+    allocateBatches(ns, targetServer, servers, simPlayer);
 
-    const weakenPerThread = targetServer.weakenAnalyze(1);
+    const execs: ScriptExecution[] = [];
+    servers.map((a) => execs.push(...a.popReservedScripts()));
 
-    // detect if we need to initialize the server
-    while (targetServer.moneyAvailable < targetServer.moneyMax) {
-        targetServer.reload();
-        const initialSecurityDiff = targetServer.hackDifficulty - targetServer.minDifficulty;
-        let growThreads = servers.reduce((tally, server) => tally + server.threadsAvailable(GROW_RAM), 0);
-        let weakenGrowThreads = 0;
-
-        const growThreadsNeeded = targetServer.growthAnalyze(simPlayer);
-        growThreads = Math.min(growThreads, growThreadsNeeded);
-
-        while (growThreads > 0) {
-            const growSecurityIncrease = targetServer.growthAnalyzeSecurity(growThreads);
-            weakenGrowThreads = Math.ceil((growSecurityIncrease + initialSecurityDiff) / weakenPerThread);
-
-            if (testAllocateThreads(ns, servers, 0, growThreads, weakenGrowThreads)) break;
-
-            growThreads--;
+    // fix up hack overrides on execs
+    // const hackLevel = targetServer.hackLevelForTime(9999, simPlayer);
+    // const growLevel = targetServer.growLevelForTime(9999, simPlayer);
+    // const weakenLevel = targetServer.weakenLevelForTime(9999, simPlayer);
+    const hackLevel = ns.getHackingLevel();
+    const growLevel = ns.getHackingLevel();
+    const weakenLevel = ns.getHackingLevel();
+    const hackTime = targetServer.hackTime(hackLevel);
+    const growTime = targetServer.growTime(hackLevel);
+    const weakenTime = targetServer.weakenTime(hackLevel);
+    const hackOffset = weakenTime - TSPACER - hackTime;
+    const growOffset = weakenTime + TSPACER - growTime;
+    const weakenHackOffset = 0;
+    const weakenGrowOffset = TSPACER * 2;
+    const batchSpacer = TSPACER * 4;
+    for (const exec of execs) {
+        switch (exec.filename) {
+            case HACKJS:
+                updateScriptExecutionArg(exec, "--hackLvlTiming", hackLevel);
+                exec.offset = (exec.batchID * batchSpacer) + hackOffset;
+                exec.args.push("--offset", exec.offset);
+                break;
+            case GROWJS:
+                updateScriptExecutionArg(exec, "--hackLvlTiming", growLevel);
+                exec.offset = (exec.batchID * batchSpacer) + growOffset;
+                exec.args.push("--offset", exec.offset);
+                break;
+            case WEAKENJS:
+                updateScriptExecutionArg(exec, "--hackLvlTiming", weakenLevel);
+                if (exec.offset) exec.offset = (exec.batchID * batchSpacer) + weakenGrowOffset;
+                else exec.offset = (exec.batchID * batchSpacer) + weakenHackOffset;
+                exec.args.push("--offset", exec.offset);
+                break;
         }
-
-        if (growThreads === 0) {
-            llog(ns, "Unable to allocate primary grow threads, starting with a full weaken");
-
-            const fullWeakenThreads = Math.ceil(
-                (targetServer.hackDifficulty - targetServer.minDifficulty) / weakenPerThread
-            );
-            let weakenThreadsNeeded = fullWeakenThreads;
-            for (const server of servers) {
-                const threads = Math.min(weakenThreadsNeeded, server.threadsAvailable(WEAKEN_RAM));
-                if (threads <= 0) continue;
-                const result = server.reserveScript(WEAKENJS, WEAKEN_RAM, threads, [
-                    "--target",
-                    targetServer.hostname,
-                    "--hackLvlTiming",
-                    ns.getHackingLevel(),
-                    "--batchID",
-                    0,
-                ]);
-
-                if (!result) throw new Error("server.reserveScript() failed after sanity check");
-
-                weakenThreadsNeeded -= threads;
-                if (weakenThreadsNeeded === 0) break;
-            }
-
-            if (weakenThreadsNeeded > 0)
-                llog("Only able to allocate %d out of %d weaken threads", fullWeakenThreads - weakenThreadsNeeded, fullWeakenThreads);
-            else
-                llog("Allocated %d weaken threads", fullWeakenThreads);
-
-            const execs: ScriptExecution[] = [];
-            servers.map((a) => execs.push(...a.reservedScripts));
-            await executeAndWait(ns, execs);
-        } else {
-            if (growThreads < growThreadsNeeded)
-                llog(ns, "Only allocating %d out of the %d needed grow threads", growThreads, growThreadsNeeded);
-            llog(ns, "Kicking off %d primary grow threads (%d weaken threads)", growThreads, weakenGrowThreads);
-
-            // execute grows first, then weakens and wait for weakens to finish
-            for (const hostname of ownedHostnames) {
-                let availableRam = ns.getServerMaxRam(hostname) - ns.getServerUsedRam(hostname);
-                if (hostname === "home") availableRam = Math.max(0, availableRam - HOME_RESERVE_RAM);
-                const threads = Math.floor(availableRam / ns.getScriptRam(GROWJS));
-                if (threads <= 0) continue;
-                if (threads < growThreads) continue; // exectue grows as a block
-                ns.exec(
-                    GROWJS,
-                    hostname,
-                    growThreads,
-                    "--target",
-                    targetHostname,
-                    "--hackLvlTiming",
-                    ns.getHackingLevel()
-                );
-                break; // only execute grows once
-            }
-
-            let weakenGrowThreadsRemaining = weakenGrowThreads;
-            let waitPID = 0;
-            for (const hostname of ownedHostnames) {
-                let availableRam = ns.getServerMaxRam(hostname) - ns.getServerUsedRam(hostname);
-                if (hostname === "home") availableRam = Math.max(0, availableRam - HOME_RESERVE_RAM);
-                let threads = Math.floor(availableRam / ns.getScriptRam(WEAKENJS));
-                if (threads <= 0) continue;
-                threads = Math.min(threads, weakenGrowThreadsRemaining);
-                waitPID = ns.exec(
-                    WEAKENJS,
-                    hostname,
-                    threads,
-                    "--target",
-                    targetHostname,
-                    "--hackLvlTiming",
-                    ns.getHackingLevel()
-                );
-                weakenGrowThreadsRemaining -= threads;
-
-                if (weakenGrowThreadsRemaining <= 0) break;
-            }
-
-            while (ns.getRunningScript(waitPID) !== null) {
-                await ns.sleep(100);
-            }
-            // wait a little bit longer to make sure everything else finished too
-            await ns.sleep(500);
-        }
-
-        money = ns.getServerMoneyAvailable(targetHostname);
     }
 
-    // start with 1 hack thread, calculate the number of grow and weaken threads needed to counter
-    // if after 1 hack thread is calculated, the end state is not min security, max money, try only doing grow threads
-    // while (true) {
-    //     hackThreads++;
-
-    //     const hackSecurityIncrease = hackThreads * 0.002;
-    // }
-
-    // start with 1 grow thread, calculate the number of weaken threads needed to counter
-    // if after 1 grow thread is calculated, the end state is not min security, try only doing weaken threads
-
-    // run the max number of weaken threads until security in minimum
+    await executeAndWait(ns, execs);
 }
 
 async function executeAndWait(ns: NS, execs: ScriptExecution[]): Promise<void> {
@@ -301,17 +350,26 @@ async function executeAndWait(ns: NS, execs: ScriptExecution[]): Promise<void> {
                 );
 
                 execs = execs.filter((a) => a.batchID !== exec.batchID);
-                continue;
+                break;
             }
 
             const pid = ns.exec(exec.filename, exec.hostname, exec.threads, ...exec.args);
 
             // Set waitPID to the last weaken call (assumed to be the last call to finish of the last batch)
             if (exec.filename === WEAKENJS) waitPID = pid;
+
+            break;
         }
     }
 
     while (ns.getRunningScript(waitPID) !== null) {
         await ns.sleep(100);
+    }
+}
+
+async function doSoften(ns: NS) {
+    const waitPID = ns.exec("soften.js", "home");
+    while (ns.getRunningScript(waitPID) !== null) {
+        await ns.sleep(0);
     }
 }

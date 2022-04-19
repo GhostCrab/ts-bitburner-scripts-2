@@ -11,41 +11,43 @@ export function llog(ns: NS, str: string, ...args: (string | number)[]): void {
 }
 
 export function softenServer(ns: NS, hostname: string): boolean {
-    if (ns.hasRootAccess(hostname)) {
-        return true;
-    }
-
-    let ports = 0;
-    if (ns.fileExists("BruteSSH.exe", "home")) {
+    try {
         ns.brutessh(hostname);
-        ports++;
+    } catch (e) {
+        //
     }
 
-    if (ns.fileExists("FTPCrack.exe", "home")) {
+    try {
         ns.ftpcrack(hostname);
-        ports++;
+    } catch (e) {
+        //
     }
 
-    if (ns.fileExists("HTTPWorm.exe", "home")) {
+    try {
         ns.httpworm(hostname);
-        ports++;
+    } catch (e) {
+        //
     }
 
-    if (ns.fileExists("relaySMTP.exe", "home")) {
+    try {
         ns.relaysmtp(hostname);
-        ports++;
+    } catch (e) {
+        //
     }
 
-    if (ns.fileExists("SQLInject.exe", "home")) {
+    try {
         ns.sqlinject(hostname);
-        ports++;
+    } catch (e) {
+        //
     }
 
-    if (ports >= ns.getServerNumPortsRequired(hostname)) {
+    try {
         ns.nuke(hostname);
+    } catch (e) {
+        return false;
     }
 
-    return ns.hasRootAccess(hostname);
+    return true;
 }
 
 export function mapHosts(

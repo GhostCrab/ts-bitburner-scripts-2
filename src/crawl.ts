@@ -7,9 +7,10 @@ export async function main(ns: NS): Promise<void> {
     const flags = ns.flags([
         ["all", false],
         ["ch", 5],
+        ["suppress", false],
     ]);
 
-    if (flags["ch"] < 0) {
+    if (flags.ch < 0) {
         ns.tprintf("ERROR: check flag must be > 0");
         return;
     }
@@ -25,11 +26,13 @@ export async function main(ns: NS): Promise<void> {
         softenServer(ns, hostname);
     }
 
+    if (flags.suppress) return;
+
     let serverListCount = hosts.length;
-    if (!flags["all"]) {
+    if (!flags.all) {
         serverListCount = Math.min(
             serverListCount,
-            flags["ch"] +
+            flags.ch +
                 hosts.reduce(
                     (tally, hostname) =>
                         tally + (ns.getHackingLevel() >= ns.getServerRequiredHackingLevel(hostname) ? 1 : 0),
@@ -40,13 +43,11 @@ export async function main(ns: NS): Promise<void> {
 
     const lookHosts = serverListCount < hosts.length ? hosts.slice(-serverListCount) : hosts;
 
-    ns.tprintf("count: %d %d %d", flags["ch"], serverListCount, hosts.length);
-
     for (const hostname of lookHosts) {
-        const displayHostname = (SPECIAL_HOSTS.includes(hostname)) ? '*' + hostname : hostname;
+        const displayHostname = SPECIAL_HOSTS.includes(hostname) ? "*" + hostname : hostname;
         const root = ns.hasRootAccess(hostname);
         const requiredSkill = ns.getServerRequiredHackingLevel(hostname);
-        const canExecute = ns.getHackingLevel() >= requiredSkill;
+        const canHack = ns.getHackingLevel() >= requiredSkill;
         const ram = ns.getServerMaxRam(hostname);
         const time = ns.getWeakenTime(hostname);
 
@@ -55,7 +56,7 @@ export async function main(ns: NS): Promise<void> {
             displayHostname,
             requiredSkill,
             root ? "[R]" : "[ ]",
-            canExecute ? "[E]" : "[ ]",
+            canHack ? "[H]" : "[ ]",
             ram > 0 ? ns.nFormat(ram * 1e9, "0b") : "-----",
             stFormat(ns, time),
             ns.getServerSecurityLevel(hostname),
@@ -66,9 +67,11 @@ export async function main(ns: NS): Promise<void> {
     }
 
     const availableRam = hosts.reduce(
-        (tally, hostname) => tally + (ns.getHackingLevel() >= ns.getServerRequiredHackingLevel(hostname) ? ns.getServerMaxRam(hostname) : 0),
+        (tally, hostname) =>
+            tally +
+            (ns.hasRootAccess(hostname) ? ns.getServerMaxRam(hostname) : 0),
         0
     );
 
-    ns.tprintf("Total RAM available: %s", ns.nFormat(availableRam * 1e9, "0b"))
+    ns.tprintf("Total RAM available: %s", ns.nFormat(availableRam * 1e9, "0b"));
 }

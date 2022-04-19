@@ -1,0 +1,10 @@
+alias test="run test.js";
+alias crawl="run crawl.js";
+alias hack="run hack.js";
+alias ll="run ll.js";
+alias ka="run ka.js";
+alias buyall="buy BruteSSH.exe; buy FTPCrack.exe; buy relaySMTP.exe; buy HTTPWorm.exe; buy SQLInject.exe";
+alias trace="run trace.js";
+alias ss="run services/server.js";
+alias kss="kill /services/server.js";
+alias exp="run exp.js";

@@ -5,6 +5,8 @@ export async function main(ns: NS): Promise<void> {
         ["target", "n00dles"],
         ["hackLvlTiming", 1],
         ["hackLvlEffect", 1],
+        ["batchID", 0],
+        ["offset", 0],
     ]);
     await ns.hack(flags["target"], {
         hackOverrideTiming: flags["hackLvlTiming"],

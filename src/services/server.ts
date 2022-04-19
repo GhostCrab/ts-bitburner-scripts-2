@@ -57,7 +57,7 @@ interface ScriptUrl {
     moduleSequenceNumber: number;
 }
 
-type Argument = string | number | boolean;
+export type Argument = string | number | boolean;
 
 export interface ScriptExecution {
     filename: string;
@@ -94,10 +94,29 @@ const argsSchema: [string, string | number | boolean | string[]][] = [
     ["port", 7],
 ];
 
-function getScriptExecutionArg(args: Argument[], arg: string): Argument | undefined {
+export function getScriptExecutionArg(args: Argument[], arg: string): Argument | undefined {
     const argIndex = args.findIndex((a) => a === arg);
     if (argIndex !== -1) return args[argIndex + 1];
     return;
+}
+
+function timingSearch(
+    server: Server,
+    timingFunction: (a: string, b?: number) => number,
+    ms: number,
+    start: number,
+    end: number,
+    precision?: number
+): number {
+    const mid = (start + end) / 2;
+    const midMs = timingFunction(server.hostname, mid);
+
+    if (precision && midMs - precision < ms && midMs + precision > ms) return mid;
+    else if (Math.round(ms) === Math.round(midMs)) return mid;
+
+    if (midMs > ms) return timingSearch(server, timingFunction, ms, mid, end, precision);
+
+    return timingSearch(server, timingFunction, ms, start, mid, precision);
 }
 
 /** @param {NS} ns **/
@@ -231,11 +250,6 @@ export class Server implements NSServer {
         this.reload(data);
     }
 
-    async initScripts(scripts: string[]): Promise<void> {
-        if (this.hostname === "home") return;
-        for (const script of scripts) if (this.ns.fileExists(script, "home")) await this.ns.scp(script, this.hostname);
-    }
-
     reload(data?: NSServer): Server {
         data ||= this.ns.getServer(this.hostname);
         Object.assign(this, data);
@@ -274,6 +288,12 @@ export class Server implements NSServer {
         return false;
     }
 
+    popReservedScripts(): ScriptExecution[] {
+        const tmp = [...this.reservedScripts];
+        this.reservedScripts = [];
+        return tmp;
+    }
+
     clearReservedScripts(): void {
         this.reservedScripts = [];
     }
@@ -293,21 +313,35 @@ export class Server implements NSServer {
         return this.ns.getHackTime(this.hostname, hackOverride);
     }
 
-    growTime(hackOverride?: number, player?: Player): number {
+    hackAnalyze(hackOverride?: number, player?: Player): number {
         if (player && this.ns.fileExists("Formulas.exe", "home"))
-            return this.ns.formulas.hacking.growTime(this, player, hackOverride);
+            return this.ns.formulas.hacking.hackPercent(this, player, hackOverride);
 
-        return this.ns.getGrowTime(this.hostname, hackOverride);
+        return this.ns.hackAnalyze(this.hostname, hackOverride);
     }
 
-    weakenTime(hackOverride?: number, player?: Player): number {
+    hackLevelForTime(ms: number, player?: Player): number {
         if (player && this.ns.fileExists("Formulas.exe", "home"))
-            return this.ns.formulas.hacking.weakenTime(this, player, hackOverride);
+            return this.ns.formulas.hacking.hackLevelForTime(this, player, ms);
 
-        return this.ns.getWeakenTime(this.hostname, hackOverride);
+        const hacking = player ? player.hacking : this.ns.getHackingLevel();
+
+        if (
+            this.ns.getHackTime(this.hostname, Number.MIN_VALUE) < ms ||
+            this.ns.getHackTime(this.hostname, hacking) > ms
+        ) {
+            return 0;
+        }
+
+        return timingSearch(this, this.ns.getHackTime, ms, Number.MIN_VALUE, hacking);
     }
 
-    growthAnalyze(player?: Player, growMult?: number, cores?: number): number {
+    hackAmountSecurity(threads = 1): number {
+        //return this.ns.hackAnalyzeSecurity(threads);
+        return 0.002 * threads;
+    }
+
+    growthAmount(player?: Player, growMult?: number, cores?: number): number {
         growMult ||= this.moneyMax / this.moneyAvailable;
         growMult = Math.max(1, growMult);
 
@@ -317,21 +351,96 @@ export class Server implements NSServer {
         return this.ns.growthAnalyze(this.hostname, growMult, cores);
     }
 
-    growPercent(player: Player, threads: number, cores?: number): number {
+    growPercent(threads: number, player?: Player, cores?: number): number {
         if (player && this.ns.fileExists("Formulas.exe", "home"))
             return this.ns.formulas.hacking.growPercent(this, threads, player, cores);
 
         return 0;
     }
 
-    growthAnalyzeSecurity(threads = 1): number {
+    growthAmountSecurity(threads = 1): number {
         //return this.ns.growthAnalyzeSecurity(threads);
         return 0.004 * threads;
     }
 
+    growTime(hackOverride?: number, player?: Player): number {
+        if (player && this.ns.fileExists("Formulas.exe", "home"))
+            return this.ns.formulas.hacking.growTime(this, player, hackOverride);
+
+        return this.ns.getGrowTime(this.hostname, hackOverride);
+    }
+
+    growLevelForTime(ms: number, player?: Player): number {
+        if (player && this.ns.fileExists("Formulas.exe", "home"))
+            return this.ns.formulas.hacking.growLevelForTime(this, player, ms);
+
+        const hacking = player ? player.hacking : this.ns.getHackingLevel();
+
+        if (
+            this.ns.getGrowTime(this.hostname, Number.MIN_VALUE) < ms ||
+            this.ns.getGrowTime(this.hostname, hacking) > ms
+        ) {
+            return 0;
+        }
+
+        return timingSearch(this, this.ns.getGrowTime, ms, Number.MIN_VALUE, hacking);
+    }
+
+    weakenTime(hackOverride?: number, player?: Player): number {
+        if (player && this.ns.fileExists("Formulas.exe", "home"))
+            return this.ns.formulas.hacking.weakenTime(this, player, hackOverride);
+
+        return this.ns.getWeakenTime(this.hostname, hackOverride);
+    }
+
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    weakenAnalyze(threads = 1, cores?: number): number {
+    weakenAmount(threads = 1, cores?: number): number {
         //return this.ns.weakenAnalyze(threads, cores);
         return 0.05 * threads;
+    }
+
+    weakenLevelForTime(ms: number, player?: Player): number {
+        if (player && this.ns.fileExists("Formulas.exe", "home"))
+            return this.ns.formulas.hacking.weakenLevelForTime(this, player, ms);
+
+        const hacking = player ? player.hacking : this.ns.getHackingLevel();
+
+        if (
+            this.ns.getWeakenTime(this.hostname, Number.MIN_VALUE) < ms ||
+            this.ns.getWeakenTime(this.hostname, hacking) > ms
+        ) {
+            return 0;
+        }
+
+        return timingSearch(this, this.ns.getWeakenTime, ms, Number.MIN_VALUE, hacking);
+    }
+
+    simGrow(growThreads: number, weakenThreads: number, player?: Player): void {
+        this.moneyAvailable = Math.min(this.growPercent(growThreads, player) * this.moneyAvailable, this.moneyMax);
+        this.hackDifficulty += this.growthAmountSecurity(growThreads);
+        this.hackDifficulty = Math.max(this.hackDifficulty - this.weakenAmount(weakenThreads), this.minDifficulty);
+    }
+
+    hackAmount(hackThreads: number, hackOverride: number, player?: Player): number {
+        return Math.min(this.hackAnalyze(hackOverride, player) * hackThreads, 1) * this.moneyAvailable;
+    }
+
+    simHack(
+        hackThreads: number,
+        hackOverride: number,
+        weakenHackThreads: number,
+        growThreads: number,
+        weakenGrowThreads: number,
+        player?: Player
+    ): number {
+        const hackAmount = this.hackAmount(hackThreads, hackOverride, player);
+
+        this.moneyAvailable = Math.max(this.moneyAvailable - hackAmount, Math.round(this.moneyMax * 0.01));
+        this.hackDifficulty += this.hackAmountSecurity(hackThreads);
+        this.hackDifficulty = Math.max(this.hackDifficulty - this.weakenAmount(weakenHackThreads), this.minDifficulty);
+
+        this.simGrow(growThreads, weakenGrowThreads, player);
+
+        return hackAmount;
     }
 }

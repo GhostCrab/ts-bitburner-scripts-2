@@ -8,7 +8,7 @@ export async function main(ns: NS): Promise<void> {
         ["all", false],
         ["ch", 5],
         ["suppress", false],
-        ["soften", false]
+        ["soften", false],
     ]);
 
     if (flags.ch < 0) {
@@ -61,7 +61,7 @@ export async function main(ns: NS): Promise<void> {
             root ? "[R]" : "[ ]",
             canHack ? "[H]" : "[ ]",
             ram > 0 ? ns.nFormat(ram * 1e9, "0b") : "-----",
-            stFormat(ns, time),
+            stFormat(ns, time, true),
             ns.getServerSecurityLevel(hostname),
             ns.getServerMinSecurityLevel(hostname),
             ns.nFormat(ns.getServerMoneyAvailable(hostname), "$0.000a"),
@@ -70,9 +70,7 @@ export async function main(ns: NS): Promise<void> {
     }
 
     const availableRam = hosts.reduce(
-        (tally, hostname) =>
-            tally +
-            (ns.hasRootAccess(hostname) ? ns.getServerMaxRam(hostname) : 0),
+        (tally, hostname) => tally + (ns.hasRootAccess(hostname) ? ns.getServerMaxRam(hostname) : 0),
         0
     );
 

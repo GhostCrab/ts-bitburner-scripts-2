@@ -25,15 +25,15 @@ export async function main(ns: NS): Promise<void> {
 
     for (const server of scriptableServers) {
         if (server.hostname === "home") continue;
-        await ns.scp("/lib/exec/const_weaken.js", "home", server.hostname);
+        await ns.scp("/lib/exec/const_share.js", "home", server.hostname);
     }
 
     for (const server of scriptableServers) {
         const availableRam = server.availableRam();
-        const availableThreads = Math.floor(availableRam / ns.getScriptRam("/lib/exec/const_weaken.js"));
+        const availableThreads = Math.floor(availableRam / ns.getScriptRam("/lib/exec/const_share.js"));
 
         if (availableThreads <= 0) continue;
 
-        ns.exec("/lib/exec/const_weaken.js", server.hostname, availableThreads, "--target", "joesguns");
+        ns.exec("/lib/exec/const_share.js", server.hostname, availableThreads);
     }
 }

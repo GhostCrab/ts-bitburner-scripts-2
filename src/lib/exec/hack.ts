@@ -9,8 +9,8 @@ export async function main(ns: NS): Promise<void> {
         ["offset", 0],
         ["uid", 0],
     ]);
-    await ns.hack(flags["target"], {
-        hackOverrideTiming: flags["hackLvlTiming"],
-        hackOverrideEffect: flags["hackLvlEffect"],
+    await ns.hack(flags.target, {
+        hackOverrideTiming: flags.hackLvlTiming,
+        hackOverrideEffect: flags.hackLvlEffect,
     });
 }

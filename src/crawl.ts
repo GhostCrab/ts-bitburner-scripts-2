@@ -8,6 +8,7 @@ export async function main(ns: NS): Promise<void> {
         ["all", false],
         ["ch", 5],
         ["suppress", false],
+        ["soften", false]
     ]);
 
     if (flags.ch < 0) {
@@ -19,12 +20,14 @@ export async function main(ns: NS): Promise<void> {
         (a, b) => ns.getServerRequiredHackingLevel(b) - ns.getServerRequiredHackingLevel(a)
     );
 
+    if (flags.soften) {
+        for (const hostname of hosts) {
+            softenServer(ns, hostname);
+        }
+    }
+
     let hostnameMaxLen = 0;
     hosts.map((a) => (hostnameMaxLen = Math.max(a.length, hostnameMaxLen)));
-
-    for (const hostname of hosts) {
-        softenServer(ns, hostname);
-    }
 
     if (flags.suppress) return;
 

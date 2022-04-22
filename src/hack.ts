@@ -1,4 +1,5 @@
 import { NS, Player } from "@ns";
+import { time } from "console";
 import { HACKJS, GROWJS, WEAKENJS, llog, stFormat } from "/lib/util";
 import { ServerService, Server, ScriptExecution, Argument } from "/services/server";
 
@@ -228,6 +229,7 @@ function allocateBatches(
     const weakenPerThread = targetServer.weakenAmount(1);
 
     const weakenTimeShort = targetServer.weakenTime(ns.getHackingLevel(), simPlayer);
+    if (timeLimit > 10*60*60*1000) timeLimit = weakenTimeShort * 2;
     const batchCountLimit = Math.max(Math.floor((timeLimit - weakenTimeShort) / batchSpacer), 1);
     const hackTimeLong = targetServer.hackTime(Number.MIN_VALUE, simPlayer);
     const batchCountMax = Math.min(Math.max(Math.floor(hackTimeLong / batchSpacer), 1), batchCountLimit);
@@ -239,6 +241,8 @@ function allocateBatches(
     //     batchCountMax = Math.min(batchCountMax, batchCountLimit);
     // }
 
+    if (doLog)
+        llog(ns, "timeLimit: %f; weakenTimeShort %f; batchCountLimit: %f", timeLimit, weakenTimeShort, batchCountLimit);
     if (doLog) llog(ns, "Maximum Batches: %d; hackLimit %.3f", batchCountMax, hackLimit);
 
     let totalMoney = 0;

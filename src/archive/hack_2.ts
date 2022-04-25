@@ -1,9 +1,10 @@
+// DESCRIPTION: Fast hack using < 8GB footprint; Define simPlayer for a better experience (if you have Formulas.exe) but it puts it over 8GB.
+
 import { NS, Player } from "@ns";
 import { HACKJS, GROWJS, WEAKENJS, llog, stFormat } from "/lib/util";
 import { ServerService, Server, ScriptExecution, Argument } from "/services/server";
 
 const TSPACER = 400;
-const BATCHSPACER = TSPACER * 4;
 
 const HOME_RESERVE_RAM = 16;
 const HACK_RAM = 1.7;
@@ -211,17 +212,11 @@ export function autocomplete(data: any, args: string[]): string[] {
 
 let serverService: ServerService;
 
-type AllocateBatchResult = {
-    batchID: number;
-    totalMoney: number;
-    totalPercent: number;
-    hasPrimary: number;
-};
-
 // allocate a batch
 // check to see if server is initialized, if not, reserve a GW batch
 // else figure out optimal batch size for number of batches left to allocate
 // and reserve all of those
+
 function allocateBatches(
     ns: NS,
     targetServer: Server,
@@ -230,18 +225,19 @@ function allocateBatches(
     doLog: boolean,
     timeLimit: number,
     simPlayer?: Player
-): AllocateBatchResult {
+): [number, number, number] {
+    const batchSpacer = TSPACER * 4;
     const weakenPerThread = targetServer.weakenAmount(1);
 
     const weakenTimeShort = targetServer.weakenTime(ns.getHackingLevel(), simPlayer);
     if (timeLimit > 10 * 60 * 60 * 1000) timeLimit = weakenTimeShort * 2;
-    const batchCountLimit = Math.max(Math.floor((timeLimit - weakenTimeShort) / BATCHSPACER), 1);
+    const batchCountLimit = Math.max(Math.floor((timeLimit - weakenTimeShort) / batchSpacer), 1);
     const hackTimeLong = targetServer.hackTime(Number.MIN_VALUE, simPlayer);
-    const batchCountMax = Math.min(Math.max(Math.floor(hackTimeLong / BATCHSPACER), 1), batchCountLimit);
+    const batchCountMax = Math.min(Math.max(Math.floor(hackTimeLong / batchSpacer), 1), batchCountLimit);
 
     // update batchCountMax to prevent time stretching when security isnt minimized
     // if (targetServer.hackDifficulty - targetServer.minDifficulty > 0) {
-    //     const newBatchCountLimit = Math.max(Math.floor(weakenTimeShort / BATCHSPACER), 1);
+    //     const newBatchCountLimit = Math.max(Math.floor(weakenTimeShort / batchSpacer), 1);
     //     llog(ns, "Reducing batch count limit from %f to %f", batchCountMax, batchCountLimit);
     //     batchCountMax = Math.min(batchCountMax, batchCountLimit);
     // }
@@ -250,22 +246,19 @@ function allocateBatches(
     //     llog(ns, "timeLimit: %f; weakenTimeShort %f; batchCountLimit: %f", timeLimit, weakenTimeShort, batchCountLimit);
     if (doLog) llog(ns, "Maximum Batches: %d; hackLimit %.3f", batchCountMax, hackLimit);
 
-    const result = {
-        totalMoney: 0,
-        totalPercent: 0,
-        batchID: 0,
-        hasPrimary: false,
-    };
+    let totalMoney = 0;
+    let totalPercent = 0;
+    let batchID = 0;
     while (true) {
         // If we're maxed out on batches, break
-        if (result.batchID >= batchCountMax) break;
+        if (batchID >= batchCountMax) break;
 
         // is server initialized
         const securityDiff = targetServer.hackDifficulty - targetServer.minDifficulty;
         const moneyDiff = targetServer.moneyMax - targetServer.moneyAvailable;
 
         if (moneyDiff > 0) {
-            if (doLog) llog(ns, "Allocating Primary Batch (BatchID %d)", result.batchID);
+            if (doLog) llog(ns, "Allocating Primary Batch (BatchID %d)", batchID);
 
             // allocate primary thread
             const bigBlock = servers
@@ -307,7 +300,7 @@ function allocateBatches(
                         "--hackLvlTiming",
                         ns.getHackingLevel(),
                         "--batchID",
-                        result.batchID,
+                        batchID,
                         "--offset",
                         0,
                     ]);
@@ -320,14 +313,14 @@ function allocateBatches(
                 // Full weaken loop indicates we are done allocating batches
                 break;
             } else {
-                reserveBatch(ns, targetServer, result.batchID, servers, 0, growThreads, 0, weakenGrowThreads);
+                reserveBatch(ns, targetServer, batchID, servers, 0, growThreads, 0, weakenGrowThreads);
             }
 
             if (doLog)
                 llog(
                     ns,
                     "Reserving Primary Batch %d G-%d GW-%d; Big Block %d",
-                    result.batchID,
+                    batchID,
                     growThreads,
                     weakenGrowThreads,
                     bigBlock
@@ -338,7 +331,7 @@ function allocateBatches(
             if (!simPlayer) continue;
 
             targetServer.simGrow(growThreads, weakenGrowThreads, simPlayer);
-            result.batchID++;
+            batchID++;
         } else {
             // allocate primary thread
             const bigBlock = servers
@@ -385,10 +378,24 @@ function allocateBatches(
 
             if (hackThreads === 0) break;
 
+            // if (doLog)
+            //     llog(
+            //         ns,
+            //         "Reserving Batch %d H-%d HW-%d G-%d GW-%d; Big Block %d; Total %s (%.2f%%)",
+            //         batchID,
+            //         hackThreads,
+            //         weakenHackThreads,
+            //         growThreads,
+            //         weakenGrowThreads,
+            //         bigBlock,
+            //         ns.nFormat(hackAmount, "$0.000a"),
+            //         (hackAmount / targetServer.moneyMax) * 100
+            //     );
+
             reserveBatch(
                 ns,
                 targetServer,
-                result.batchID++,
+                batchID++,
                 servers,
                 hackThreads,
                 growThreads,
@@ -396,12 +403,12 @@ function allocateBatches(
                 weakenGrowThreads
             );
 
-            result.totalMoney += hackAmount;
-            result.totalPercent += (hackAmount / targetServer.moneyMax) * 100;
+            totalMoney += hackAmount;
+            totalPercent += (hackAmount / targetServer.moneyMax) * 100;
         }
     }
 
-    return result;
+    return [batchID, totalMoney, totalPercent];
 }
 
 export async function main(ns: NS): Promise<void> {
@@ -413,8 +420,6 @@ export async function main(ns: NS): Promise<void> {
     ns.tail();
 
     let targetServer: Server;
-
-    await doSoften(ns);
 
     try {
         options = ns.flags(argsSchema);
@@ -452,24 +457,21 @@ export async function main(ns: NS): Promise<void> {
 
     options.limit *= 60 * 1000; // limit input assumed to be in minutes
 
+    await doSoften(ns);
+
     const servers = serverService
         .getScriptableServers(options.reserve)
         .sort((a, b) => a.availableRam() - b.availableRam());
 
-    const simPlayer: Player | undefined = ns.fileExists("Formulas.exe", "home") ? ns.getPlayer() : undefined;
-
-    // const targets = serverService.getHackableServers(ns.getHackingLevel());
-    // const targetIncomes: [Server, number][] = [];
-    // for (const target of targets) {
-    //     targetIncomes.push([target, getIncome(target)]);
-    // }
+    const simPlayer: Player | undefined = undefined;
+    const batchSpacer = TSPACER * 4;
 
     while (true) {
         let bestHackLimit = 0;
         let bestHackLimitValue = 0;
         for (const hackLimit of [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.95, 0.975, 1]) {
             targetServer.reload();
-            const allocateBatchResult = allocateBatches(
+            const [batchCount, totalMoney] = allocateBatches(
                 ns,
                 targetServer,
                 servers,
@@ -478,16 +480,21 @@ export async function main(ns: NS): Promise<void> {
                 options.limit,
                 simPlayer
             );
-            const batchCount = allocateBatchResult.batchID;
-            const totalMoney = allocateBatchResult.totalMoney;
-
-            const weakenLevelCalc = targetServer.weakenLevelForTime(batchCount * BATCHSPACER, simPlayer);
+            const weakenLevelCalc = targetServer.weakenLevelForTime(batchCount * batchSpacer, simPlayer);
             const weakenLevel =
                 weakenLevelCalc <= 0 || weakenLevelCalc > ns.getHackingLevel() ? ns.getHackingLevel() : weakenLevelCalc;
             const weakenTime = targetServer.weakenTime(weakenLevel);
-            const cycleTime = weakenTime + batchCount * BATCHSPACER;
+            const cycleTime = weakenTime + batchCount * batchSpacer;
             const value = totalMoney / (cycleTime / 1000);
 
+            // llog(
+            //     ns,
+            //     "Check %.3f - %d, %s, %s/s",
+            //     hackLimit,
+            //     batchCount,
+            //     ns.nFormat(totalMoney, "$0.000a"),
+            //     ns.nFormat(value, "$0.000a")
+            // );
             if (value > bestHackLimitValue) {
                 bestHackLimit = hackLimit;
                 bestHackLimitValue = value;
@@ -498,7 +505,7 @@ export async function main(ns: NS): Promise<void> {
 
         targetServer.reload();
 
-        const allocateBatchResult = allocateBatches(
+        const [batchCount, totalMoney, totalPercent] = allocateBatches(
             ns,
             targetServer,
             servers,
@@ -508,19 +515,15 @@ export async function main(ns: NS): Promise<void> {
             simPlayer
         );
 
-        const batchCount = allocateBatchResult.batchID;
-        const totalMoney = allocateBatchResult.totalMoney;
-        const totalPercent = allocateBatchResult.totalPercent;
-
         const execs: ScriptExecution[] = [];
         servers.map((a) => execs.push(...a.popReservedScripts()));
 
         // reverse engineer hackOverride to tightly fit batch count
         // const hackTimeLong = targetServer.hackTime(Number.MIN_VALUE, simPlayer);
-        // const batchCountMax = Math.max(Math.floor(hackTimeLong / BATCHSPACER), 1);
+        // const batchCountMax = Math.max(Math.floor(hackTimeLong / batchSpacer), 1);
         const playerHackingLevel = ns.getHackingLevel();
 
-        const hackTimeTarget = batchCount * BATCHSPACER;
+        const hackTimeTarget = batchCount * batchSpacer;
         const hackLevelCalc = targetServer.hackLevelForTime(hackTimeTarget, simPlayer);
         const hackLevel = hackLevelCalc <= 0 || hackLevelCalc > playerHackingLevel ? playerHackingLevel : hackLevelCalc;
         const growLevelCalc = targetServer.growLevelForTime(hackTimeTarget, simPlayer);
@@ -538,29 +541,39 @@ export async function main(ns: NS): Promise<void> {
         const weakenGrowOffset = TSPACER * 2;
         const startOffset = hackOffset < 0 ? -hackOffset : 0;
 
+        // ns.tprintf("Batches: %d", batchCount);
+        // ns.tprintf("Target Time: %s", stFormat(ns, hackTimeTarget, true));
+        // ns.tprintf("Hack Level          : %8.4f/%8.4f %s", hackLevelCalc, hackLevel, stFormat(ns, hackTime, true));
+        // ns.tprintf("Grow Level          : %8.4f/%8.4f %s", growLevelCalc, growLevel, stFormat(ns, growTime, true));
+        // ns.tprintf("Weaken Level        : %8.4f/%8.4f %s", weakenLevelCalc, weakenLevel, stFormat(ns, weakenTime, true));
+        // ns.tprintf("Hack Timeline       : %6d %6d %6d", hackOffset + startOffset, hackTime, hackOffset + startOffset + hackTime);
+        // ns.tprintf("Weaken Hack Timeline: %6d %6d %6d", weakenHackOffset + startOffset, weakenTime, weakenHackOffset + startOffset + weakenTime);
+        // ns.tprintf("Grow Timeline       : %6d %6d %6d", growOffset + startOffset, growTime, growOffset + startOffset + growTime);
+        // ns.tprintf("Weaken Grow Timeline: %6d %6d %6d", weakenGrowOffset + startOffset, weakenTime, weakenGrowOffset + startOffset + weakenTime);
+
         // fix up hack overrides on execs
         for (const exec of execs) {
             switch (exec.filename) {
                 case HACKJS:
                     updateScriptExecutionArg(exec, "--hackLvlTiming", hackLevel);
-                    exec.offset = exec.batchID * BATCHSPACER + hackOffset + startOffset;
+                    exec.offset = exec.batchID * batchSpacer + hackOffset + startOffset;
                     updateScriptExecutionArg(exec, "--offset", exec.offset);
                     break;
                 case GROWJS:
                     updateScriptExecutionArg(exec, "--hackLvlTiming", growLevel);
-                    exec.offset = exec.batchID * BATCHSPACER + growOffset + startOffset;
+                    exec.offset = exec.batchID * batchSpacer + growOffset + startOffset;
                     updateScriptExecutionArg(exec, "--offset", exec.offset);
                     break;
                 case WEAKENJS:
                     updateScriptExecutionArg(exec, "--hackLvlTiming", weakenLevel);
-                    if (exec.offset) exec.offset = exec.batchID * BATCHSPACER + weakenGrowOffset + startOffset;
-                    else exec.offset = exec.batchID * BATCHSPACER + weakenHackOffset + startOffset;
+                    if (exec.offset) exec.offset = exec.batchID * batchSpacer + weakenGrowOffset + startOffset;
+                    else exec.offset = exec.batchID * batchSpacer + weakenHackOffset + startOffset;
                     updateScriptExecutionArg(exec, "--offset", exec.offset);
                     break;
             }
         }
 
-        const cycleTime = weakenTime + batchCount * BATCHSPACER;
+        const cycleTime = weakenTime + batchCount * batchSpacer;
         llog(
             ns,
             "Executing %d batches over %s for %s income (%s/s) %d%%",
@@ -585,88 +598,6 @@ export async function main(ns: NS): Promise<void> {
 
         await executeAndWait(ns, execs);
     }
-}
-
-function getIncome(ns: NS, _targetServer: Server, servers: Server[], timespan: number) {
-    const simPlayer = ns.getPlayer();
-    let bestHackLimit = 0;
-    let bestHackLimitValue = 0;
-    const initialTargetServer = new Server(ns, _targetServer);
-    let targetServer: Server = new Server(initialTargetServer);
-    let timeleft = timespan;
-    let totalMoneyGained = 0;
-    while (timeleft > 0) {
-        const tmpServer = new Server(targetServer);
-        for (const hackLimit of [0.25, 0.5, 0.75, 0.9, 1]) {
-            targetServer = new Server(tmpServer);
-            const [batchCount, totalMoney] = allocateBatches(
-                ns,
-                targetServer,
-                servers,
-                hackLimit,
-                false,
-                timeleft,
-                simPlayer
-            );
-            const weakenLevelCalc = targetServer.weakenLevelForTime(batchCount * BATCHSPACER, simPlayer);
-            const weakenLevel =
-                weakenLevelCalc <= 0 || weakenLevelCalc > ns.getHackingLevel() ? ns.getHackingLevel() : weakenLevelCalc;
-            const weakenTime = targetServer.weakenTime(weakenLevel);
-            const cycleTime = weakenTime + batchCount * BATCHSPACER;
-            const value = totalMoney / (cycleTime / 1000);
-
-            if (value > bestHackLimitValue) {
-                bestHackLimit = hackLimit;
-                bestHackLimitValue = value;
-            }
-
-            servers.map((a) => a.clearReservedScripts());
-        }
-
-        targetServer = new Server(tmpServer);
-
-        const allocateBatchResult = allocateBatches(
-            ns,
-            targetServer,
-            servers,
-            bestHackLimit,
-            true,
-            options.limit,
-            simPlayer
-        );
-
-        const batchCount = allocateBatchResult.batchID;
-        const totalMoney = allocateBatchResult.totalMoney;
-        const totalPercent = allocateBatchResult.totalPercent;
-        const usedPrimary = allocateBatchResult.hasPrimary;
-
-        const execs: ScriptExecution[] = [];
-        servers.map((a) => execs.push(...a.popReservedScripts()));
-
-        // reverse engineer hackOverride to tightly fit batch count
-        const playerHackingLevel = simPlayer.hacking;
-        const hackTimeTarget = batchCount * BATCHSPACER;
-        const weakenLevelCalc = targetServer.weakenLevelForTime(hackTimeTarget, simPlayer);
-        const weakenLevel =
-            weakenLevelCalc <= 0 || weakenLevelCalc > playerHackingLevel ? playerHackingLevel : weakenLevelCalc;
-        const weakenTime = targetServer.weakenTime(weakenLevel);
-
-        const cycleTime = weakenTime + batchCount * BATCHSPACER;
-
-        if (usedPrimary) {
-            timeleft -= cycleTime;
-            totalMoneyGained += totalMoney;
-
-            // simulate the batches on targetServer and do the loop again
-        } else {
-            const cyclesLeft = Math.ceil(timeleft / cycleTime);
-            timeleft -= cycleTime * cyclesLeft;
-            totalMoneyGained += totalMoney * cyclesLeft;
-        }
-    }
-
-    const totalTime = timespan - timeleft;
-    return (totalMoneyGained / (totalTime / 1000)); // $/s
 }
 
 async function executeAndWait(ns: NS, execs: ScriptExecution[]): Promise<void> {
@@ -696,6 +627,14 @@ async function executeAndWait(ns: NS, execs: ScriptExecution[]): Promise<void> {
                 break;
             }
 
+            // llog(
+            //     ns,
+            //     "Executing %s:%s -t%d offset: %s",
+            //     exec.hostname,
+            //     exec.filename,
+            //     exec.threads,
+            //     stFormat(ns, exec.offset, true)
+            // );
             const pid = ns.exec(exec.filename, exec.hostname, exec.threads, ...exec.args);
 
             // Set waitPID to the last weaken call (assumed to be the last call to finish of the last batch)
@@ -711,7 +650,7 @@ async function executeAndWait(ns: NS, execs: ScriptExecution[]): Promise<void> {
 }
 
 async function doSoften(ns: NS) {
-    const waitPID = ns.exec("crawl.js", "home", 1, "-bs", "--suppress");
+    const waitPID = ns.exec("soften.js", "home");
     while (ns.getRunningScript(waitPID) !== null) {
         await ns.sleep(0);
     }

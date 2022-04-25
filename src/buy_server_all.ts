@@ -30,7 +30,8 @@ function buyServers(ns: NS, ram: number, numServers: number): number {
 
     const deleteServers: string[] = [];
     for (let i = 0; i < numToDelete; i++) {
-        deleteServers.push(pservers.shift());
+        const pserver = pservers.shift();
+        if (pserver) deleteServers.push(pserver);
     }
 
     for (const server of deleteServers) {
@@ -62,7 +63,7 @@ function buyServers(ns: NS, ram: number, numServers: number): number {
 
 export async function main(ns: NS): Promise<void> {
     let maxPow = 8; // Minimum ram is 256
-    let sizes: [number, number][] = [];
+    let sizes: [number, number, number][] = [];
     const cash = ns.getPlayer().money;
     const currentSize = getCurrentRamSize(ns);
 

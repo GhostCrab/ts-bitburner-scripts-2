@@ -1,6 +1,6 @@
 import { NS } from "@ns";
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { doBuyAndSoftenAll, doBackdoors, ALL_FACTIONS, stFormat } from "lib/util";
+import { doBuyAndSoftenAll, doBackdoors, stFormat, ALL_FACTIONS } from "lib/util";
 import { Augmentation } from "lib/augmentation/augmentation";
 
 export async function main(ns: NS): Promise<void> {
@@ -9,14 +9,14 @@ export async function main(ns: NS): Promise<void> {
 
     const player = ns.getPlayer();
 
-    const checkFactions = player.factions.concat(ns.checkFactionInvitations());
-    const sortedFactions = checkFactions.sort(
-        (a, b) =>
-            (ns.getPlayer().currentWorkFactionName === b ? ns.getPlayer().workRepGained : 0) +
-            ns.getFactionRep(b) -
-            ((ns.getPlayer().currentWorkFactionName === a ? ns.getPlayer().workRepGained : 0) + ns.getFactionRep(a))
-    );
-    //let sortedFactions = ALL_FACTIONS.sort((a, b) => ns.getFactionRep(b) - ns.getFactionRep(a));
+    // const checkFactions = player.factions.concat(ns.checkFactionInvitations());
+    // const sortedFactions = checkFactions.sort(
+    //     (a, b) =>
+    //         (ns.getPlayer().currentWorkFactionName === b ? ns.getPlayer().workRepGained : 0) +
+    //         ns.getFactionRep(b) -
+    //         ((ns.getPlayer().currentWorkFactionName === a ? ns.getPlayer().workRepGained : 0) + ns.getFactionRep(a))
+    // );
+    const sortedFactions = ALL_FACTIONS.sort((a, b) => ns.getFactionRep(b) - ns.getFactionRep(a));
 
     let allPurchaseableAugs = [];
     let topFaction = true;

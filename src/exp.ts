@@ -2,7 +2,7 @@ import { NS } from "@ns";
 import { ServerService } from "/services/server";
 
 let options;
-const argsSchema: [string, string | number | boolean | string[]][] = [["reserve", 16]];
+const argsSchema: [string, string | number | boolean | string[]][] = [["reserve", Number.MAX_SAFE_INTEGER]];
 
 let serverService: ServerService;
 

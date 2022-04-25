@@ -1,5 +1,5 @@
 import { NS } from "@ns";
-import { allHosts, softenServer, stFormat } from "/lib/util";
+import { allHosts, doProgramBuys, softenServer, stFormat } from "/lib/util";
 
 const SPECIAL_HOSTS = ["CSEC", "avmnite-02h", "I.I.I.I", "run4theh111z", "w0r1d_d43m0n"];
 
@@ -11,6 +11,7 @@ const argsSchema: [string, string | number | boolean | string[]][] = [
     ["soften", false],
     ["s", false],
     ["a", false],
+    ["b", false],
 ];
 
 // eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types, @typescript-eslint/no-explicit-any
@@ -18,7 +19,7 @@ export function autocomplete(data: any, args: string[]): string[] {
     data.flags(argsSchema);
     const lastFlag = args.length > 1 ? args[args.length - 2] : "";
     if (["--ch"].includes(lastFlag)) return ["10"];
-    return ["-s", "-a", "--all", "--ch", "--suppress", "--soften"];
+    return ["-s", "-a", "--all", "--ch", "--suppress", "--soften", "-b"];
 }
 
 export async function main(ns: NS): Promise<void> {
@@ -36,6 +37,9 @@ export async function main(ns: NS): Promise<void> {
 
     options.soften = options.soften || options.s;
     options.all = options.all || options.a;
+
+    if (options.b)
+        doProgramBuys(ns);
 
     const hosts = allHosts(ns).sort(
         (a, b) => ns.getServerRequiredHackingLevel(b) - ns.getServerRequiredHackingLevel(a)

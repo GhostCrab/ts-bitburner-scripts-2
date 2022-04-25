@@ -2369,6 +2369,8 @@
     * purchased. Throws an error if the specified program/exploit does not exist
     */
    getDarkwebProgramCost(programName: string): number;
+
+   heart: {break(): number};
  }
  
  /**

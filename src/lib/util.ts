@@ -164,9 +164,52 @@ export async function doBackdoor(ns: NS, hostname: string): Promise<boolean> {
 }
 
 export async function doBackdoors(ns: NS): Promise<void> {
-    const targetHosts = ["CSEC", "avmnite-02h", "I.I.I.I", "run4theh111z", "w0r1d_d43m0n"];
+    //const targetHosts = ["CSEC", "avmnite-02h", "I.I.I.I", "run4theh111z", "w0r1d_d43m0n"];
+    const targetHosts = ["CSEC", "avmnite-02h", "I.I.I.I", "run4theh111z"];
+    //const targetHosts = ["megacorp","fulcrumassets","kuai-gong","fulcrumtech","nwo","4sigma","blade","omnitek","clarkinc"]
 
     for (const hostname of targetHosts) {
         await doBackdoor(ns, hostname);
     }
+
+    // for (const hostname of allHosts(ns)) {
+    //     if (hostname === "w0r1d_d43m0n") continue;
+    //     await doBackdoor(ns, hostname);
+    // }
 }
+
+export const ALL_FACTIONS = [
+    "Illuminati",
+    "Daedalus",
+    "The Covenant",
+    "ECorp",
+    "MegaCorp",
+    "Bachman & Associates",
+    "Blade Industries",
+    "NWO",
+    "Clarke Incorporated",
+    "OmniTek Incorporated",
+    "Four Sigma",
+    "KuaiGong International",
+    "Fulcrum Secret Technologies",
+    "BitRunners",
+    "The Black Hand",
+    "NiteSec",
+    "Aevum",
+    "Chongqing",
+    "Ishima",
+    "New Tokyo",
+    "Sector-12",
+    "Volhaven",
+    "Speakers for the Dead",
+    "The Dark Army",
+    "The Syndicate",
+    "Silhouette",
+    "Tetrads",
+    "Slum Snakes",
+    "Netburners",
+    "Tian Di Hui",
+    "CyberSec",
+    "Bladeburners",
+    "Church of the Machine God",
+];

@@ -3,24 +3,45 @@ import { allHosts, softenServer, stFormat } from "/lib/util";
 
 const SPECIAL_HOSTS = ["CSEC", "avmnite-02h", "I.I.I.I", "run4theh111z", "w0r1d_d43m0n"];
 
-export async function main(ns: NS): Promise<void> {
-    const flags = ns.flags([
-        ["all", false],
-        ["ch", 5],
-        ["suppress", false],
-        ["soften", false],
-    ]);
+let options;
+const argsSchema: [string, string | number | boolean | string[]][] = [
+    ["all", false],
+    ["ch", 5],
+    ["suppress", false],
+    ["soften", false],
+    ["s", false],
+    ["a", false],
+];
 
-    if (flags.ch < 0) {
+// eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types, @typescript-eslint/no-explicit-any
+export function autocomplete(data: any, args: string[]): string[] {
+    data.flags(argsSchema);
+    const lastFlag = args.length > 1 ? args[args.length - 2] : "";
+    if (["--ch"].includes(lastFlag)) return ["10"];
+    return ["-s", "-a", "--all", "--ch", "--suppress", "--soften"];
+}
+
+export async function main(ns: NS): Promise<void> {
+    try {
+        options = ns.flags(argsSchema);
+    } catch (e) {
+        ns.tprintf("ERROR: %s", e);
+        return;
+    }
+
+    if (options.ch < 0) {
         ns.tprintf("ERROR: check flag must be > 0");
         return;
     }
+
+    options.soften = options.soften || options.s;
+    options.all = options.all || options.a;
 
     const hosts = allHosts(ns).sort(
         (a, b) => ns.getServerRequiredHackingLevel(b) - ns.getServerRequiredHackingLevel(a)
     );
 
-    if (flags.soften) {
+    if (options.soften) {
         for (const hostname of hosts) {
             softenServer(ns, hostname);
         }
@@ -29,13 +50,13 @@ export async function main(ns: NS): Promise<void> {
     let hostnameMaxLen = 0;
     hosts.map((a) => (hostnameMaxLen = Math.max(a.length, hostnameMaxLen)));
 
-    if (flags.suppress) return;
+    if (options.suppress) return;
 
     let serverListCount = hosts.length;
-    if (!flags.all) {
+    if (!options.all) {
         serverListCount = Math.min(
             serverListCount,
-            flags.ch +
+            options.ch +
                 hosts.reduce(
                     (tally, hostname) =>
                         tally + (ns.getHackingLevel() >= ns.getServerRequiredHackingLevel(hostname) ? 1 : 0),
@@ -61,7 +82,7 @@ export async function main(ns: NS): Promise<void> {
             root ? "[R]" : "[ ]",
             canHack ? "[H]" : "[ ]",
             ram > 0 ? ns.nFormat(ram * 1e9, "0b") : "-----",
-            stFormat(ns, time, true),
+            stFormat(ns, time),
             ns.getServerSecurityLevel(hostname),
             ns.getServerMinSecurityLevel(hostname),
             ns.nFormat(ns.getServerMoneyAvailable(hostname), "$0.000a"),

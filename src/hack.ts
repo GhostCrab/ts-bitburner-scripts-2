@@ -1,5 +1,4 @@
 import { NS, Player } from "@ns";
-import { time } from "console";
 import { HACKJS, GROWJS, WEAKENJS, llog, stFormat } from "/lib/util";
 import { ServerService, Server, ScriptExecution, Argument } from "/services/server";
 
@@ -229,7 +228,7 @@ function allocateBatches(
     const weakenPerThread = targetServer.weakenAmount(1);
 
     const weakenTimeShort = targetServer.weakenTime(ns.getHackingLevel(), simPlayer);
-    if (timeLimit > 10*60*60*1000) timeLimit = weakenTimeShort * 2;
+    if (timeLimit > 10 * 60 * 60 * 1000) timeLimit = weakenTimeShort * 2;
     const batchCountLimit = Math.max(Math.floor((timeLimit - weakenTimeShort) / batchSpacer), 1);
     const hackTimeLong = targetServer.hackTime(Number.MIN_VALUE, simPlayer);
     const batchCountMax = Math.min(Math.max(Math.floor(hackTimeLong / batchSpacer), 1), batchCountLimit);
@@ -241,8 +240,8 @@ function allocateBatches(
     //     batchCountMax = Math.min(batchCountMax, batchCountLimit);
     // }
 
-    if (doLog)
-        llog(ns, "timeLimit: %f; weakenTimeShort %f; batchCountLimit: %f", timeLimit, weakenTimeShort, batchCountLimit);
+    // if (doLog)
+    //     llog(ns, "timeLimit: %f; weakenTimeShort %f; batchCountLimit: %f", timeLimit, weakenTimeShort, batchCountLimit);
     if (doLog) llog(ns, "Maximum Batches: %d; hackLimit %.3f", batchCountMax, hackLimit);
 
     let totalMoney = 0;
@@ -257,7 +256,7 @@ function allocateBatches(
         const moneyDiff = targetServer.moneyMax - targetServer.moneyAvailable;
 
         if (moneyDiff > 0) {
-            //llog(ns, "Allocating Primary Batch (BatchID %d)", batchID);
+            if (doLog) llog(ns, "Allocating Primary Batch (BatchID %d)", batchID);
 
             // allocate primary thread
             const bigBlock = servers
@@ -265,7 +264,7 @@ function allocateBatches(
                 .filter((a) => a > 0)
                 .sort((a, b) => b - a)[0];
 
-            //llog(ns, "Big Block %d", bigBlock);
+            if (doLog) llog(ns, "Big Block %d", bigBlock);
 
             // We've run out of available ram, break out and execute reserved scripts
             if (bigBlock < GROW_RAM) break;
@@ -521,9 +520,6 @@ export async function main(ns: NS): Promise<void> {
         // const hackTimeLong = targetServer.hackTime(Number.MIN_VALUE, simPlayer);
         // const batchCountMax = Math.max(Math.floor(hackTimeLong / batchSpacer), 1);
         const playerHackingLevel = ns.getHackingLevel();
-
-        const hackTimeMin = targetServer.hackTime(playerHackingLevel);
-        const weakenTimeMin = targetServer.weakenTime(playerHackingLevel);
 
         const hackTimeTarget = batchCount * batchSpacer;
         const hackLevelCalc = targetServer.hackLevelForTime(hackTimeTarget, simPlayer);

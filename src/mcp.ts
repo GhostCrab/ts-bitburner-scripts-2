@@ -3,20 +3,46 @@ import { NS } from "@ns";
 import { doBuyAndSoftenAll, doBackdoors, stFormat, ALL_FACTIONS } from "lib/util";
 import { Augmentation } from "lib/augmentation/augmentation";
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let options: any;
+const argsSchema: [string, string | number | boolean | string[]][] = [
+    ["a", false],
+    ["n", false],
+];
+
+// eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types, @typescript-eslint/no-explicit-any,  @typescript-eslint/no-unused-vars
+export function autocomplete(data: any, args: string[]): string[] {
+    data.flags(argsSchema);
+    return ["-a", "-n", "-an"];
+}
+
 export async function main(ns: NS): Promise<void> {
+    try {
+        options = ns.flags(argsSchema);
+    } catch (e) {
+        ns.tprintf("ERROR: %s", e);
+        return;
+    }
+
     doBuyAndSoftenAll(ns);
     await doBackdoors(ns);
 
-    const player = ns.getPlayer();
+    let sortedFactions: string[];
+    if (!options.a) {
+        const player = ns.getPlayer();
 
-    // const checkFactions = player.factions.concat(ns.checkFactionInvitations());
-    // const sortedFactions = checkFactions.sort(
-    //     (a, b) =>
-    //         (ns.getPlayer().currentWorkFactionName === b ? ns.getPlayer().workRepGained : 0) +
-    //         ns.getFactionRep(b) -
-    //         ((ns.getPlayer().currentWorkFactionName === a ? ns.getPlayer().workRepGained : 0) + ns.getFactionRep(a))
-    // );
-    const sortedFactions = ALL_FACTIONS.sort((a, b) => ns.getFactionRep(b) - ns.getFactionRep(a));
+        const checkFactions = player.factions.concat(ns.checkFactionInvitations());
+        sortedFactions = checkFactions.sort(
+            (a, b) =>
+                (ns.getPlayer().currentWorkFactionName === b ? ns.getPlayer().workRepGained : 0) +
+                ns.getFactionRep(b) -
+                ((ns.getPlayer().currentWorkFactionName === a ? ns.getPlayer().workRepGained : 0) + ns.getFactionRep(a))
+        );
+    } else {
+        sortedFactions = ALL_FACTIONS.sort((a, b) => ns.getFactionRep(b) - ns.getFactionRep(a));
+    }
+
+    sortedFactions = sortedFactions.filter(a => a !== "Church of the Machine God");
 
     let allPurchaseableAugs = [];
     let topFaction = true;
@@ -29,10 +55,10 @@ export async function main(ns: NS): Promise<void> {
             .sort((a, b) => a.rep - b.rep);
         const augsToBuy = [];
         for (const aug of augs) {
-            if (aug.isHackUseful() && !aug.owned) {
+            if (aug.isHackUseful(options.n) && !aug.owned) {
                 augsToBuy.push(aug);
             }
-            if (aug.isHackUseful() && aug.purchaseable && !aug.owned && !aug.installed) {
+            if (aug.isHackUseful(options.n) && aug.purchaseable && !aug.owned && !aug.installed) {
                 allPurchaseableAugs.push(aug);
             }
         }

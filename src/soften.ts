@@ -1,7 +1,9 @@
 import { NS } from "@ns";
-import { allHosts, HACKJS, GROWJS, WEAKENJS, softenServer } from "/lib/util";
+import { allHosts, HACKJS, GROWJS, WEAKENJS, softenServer, doProgramBuys } from "/lib/util";
 
 export async function main(ns: NS): Promise<void> {
+    doProgramBuys(ns);
+
     const hosts = allHosts(ns);
 
     for (const hostname of hosts) {

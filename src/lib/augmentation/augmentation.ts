@@ -67,19 +67,19 @@ export class Augmentation {
         return this.str;
     }
 
-    isHackUseful(): boolean {
+    isHackUseful(all = false): boolean {
 		if (this.name === "Neuroflux Governor") return false;
-        return true;
+        if(all) return true;
         // if (this.stats.crime_money_mult) return true;
         // if (this.stats.crime_success_mult) return true;                    
         if (this.stats.company_rep_mult) return true;
         if (this.stats.faction_rep_mult) return true;
-        // if (this.stats.hacking_chance_mult) return true;
-        // if (this.stats.hacking_exp_mult) return true;
-        // if (this.stats.hacking_grow_mult) return true;
-        // if (this.stats.hacking_money_mult) return true;
-        // if (this.stats.hacking_mult) return true;
-        // if (this.stats.hacking_speed_mult) return true;
+        if (this.stats.hacking_chance_mult) return true;
+        if (this.stats.hacking_exp_mult) return true;
+        if (this.stats.hacking_grow_mult) return true;
+        if (this.stats.hacking_money_mult) return true;
+        if (this.stats.hacking_mult) return true;
+        if (this.stats.hacking_speed_mult) return true;
         // if (this.stats.hacknet_node_core_cost_mult) return true;
         // if (this.stats.hacknet_node_level_cost_mult) return true;
         // if (this.stats.hacknet_node_money_mult) return true;

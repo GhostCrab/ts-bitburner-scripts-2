@@ -330,7 +330,7 @@ function allocateBatches(
             // out of available threads, just assign everything to batchID 0.
             if (!simPlayer) continue;
 
-            targetServer.simGrow(growThreads, weakenGrowThreads, simPlayer);
+            targetServer.simGrowBatch(growThreads, weakenGrowThreads, simPlayer);
             batchID++;
         } else {
             // allocate primary thread
@@ -421,6 +421,8 @@ export async function main(ns: NS): Promise<void> {
 
     let targetServer: Server;
 
+    await doSoften(ns);
+
     try {
         options = ns.flags(argsSchema);
         serverService = new ServerService(ns);
@@ -457,13 +459,11 @@ export async function main(ns: NS): Promise<void> {
 
     options.limit *= 60 * 1000; // limit input assumed to be in minutes
 
-    await doSoften(ns);
-
     const servers = serverService
         .getScriptableServers(options.reserve)
         .sort((a, b) => a.availableRam() - b.availableRam());
 
-    const simPlayer: Player | undefined = undefined;
+    const simPlayer: Player | undefined = undefined; // ns.getPlayer();
     const batchSpacer = TSPACER * 4;
 
     while (true) {
@@ -650,7 +650,7 @@ async function executeAndWait(ns: NS, execs: ScriptExecution[]): Promise<void> {
 }
 
 async function doSoften(ns: NS) {
-    const waitPID = ns.exec("soften.js", "home");
+    const waitPID = ns.exec("crawl.js", "home", 1, "-bs", "--suppress");
     while (ns.getRunningScript(waitPID) !== null) {
         await ns.sleep(0);
     }

@@ -243,7 +243,7 @@ export class Server implements NSServer {
     reservedRam = 0;
     reservedScripts: ScriptExecution[] = [];
 
-    constructor(ns: NS, data: string | NSServer | undefined) {
+    constructor(ns: NS, data?: string | NSServer) {
         this.ns = ns;
         if (typeof data === "string") {
             this.hostname = data;
@@ -417,7 +417,7 @@ export class Server implements NSServer {
         return timingSearch(this, this.ns.getWeakenTime, ms, Number.MIN_VALUE, hacking);
     }
 
-    simGrow(growThreads: number, weakenThreads: number, player?: Player): void {
+    simGrowBatch(growThreads: number, weakenThreads: number, player?: Player): void {
         this.moneyAvailable = Math.min(this.growPercent(growThreads, player) * this.moneyAvailable, this.moneyMax);
         this.hackDifficulty += this.growthAmountSecurity(growThreads);
         this.hackDifficulty = Math.max(this.hackDifficulty - this.weakenAmount(weakenThreads), this.minDifficulty);
@@ -427,7 +427,7 @@ export class Server implements NSServer {
         return Math.min(this.hackAnalyze(hackOverride, player) * hackThreads, 1) * this.moneyAvailable;
     }
 
-    simHack(
+    simHackBatch(
         hackThreads: number,
         hackOverride: number,
         weakenHackThreads: number,
@@ -441,8 +441,24 @@ export class Server implements NSServer {
         this.hackDifficulty += this.hackAmountSecurity(hackThreads);
         this.hackDifficulty = Math.max(this.hackDifficulty - this.weakenAmount(weakenHackThreads), this.minDifficulty);
 
-        this.simGrow(growThreads, weakenGrowThreads, player);
+        this.simGrowBatch(growThreads, weakenGrowThreads, player);
 
         return hackAmount;
+    }
+
+    simHack(hackThreads: number, hackOverride: number, player: Player): void {
+        const hackAmount = this.hackAmount(hackThreads, hackOverride, player);
+
+        this.moneyAvailable = Math.max(this.moneyAvailable - hackAmount, Math.round(this.moneyMax * 0.01));
+        this.hackDifficulty += this.hackAmountSecurity(hackThreads);
+    }
+
+    simGrow(growThreads: number, hackOverride: number, player: Player): void {
+        this.moneyAvailable = Math.min(this.growPercent(growThreads, player) * this.moneyAvailable, this.moneyMax);
+        this.hackDifficulty += this.growthAmountSecurity(growThreads);
+    }
+
+    simWeaken(weakenThreads: number): void {
+        this.hackDifficulty = Math.max(this.hackDifficulty - this.weakenAmount(weakenThreads), this.minDifficulty);
     }
 }

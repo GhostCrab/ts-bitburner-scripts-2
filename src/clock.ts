@@ -214,7 +214,7 @@ export async function main(ns: NS): Promise<void> {
 
                 // Update Target & Income
                 targetEl.innerText = data[2];
-                incomeEl.innerText = `${ns.nFormat(data[3], "($0.0a)")}/s`;
+                incomeEl.innerText = data[3];
 
                 // Update State & Countdown
                 stateEl.innerText = data[4];

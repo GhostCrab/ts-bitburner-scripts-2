@@ -1,9 +1,20 @@
 import { NS } from "@ns";
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let options: any;
+const argsSchema: [string, string | number | boolean | string[]][] = [
+    ["allow", 1],
+    ["quiet", false],
+    ["execute", false],
+    ["a", 1],
+    ["q", false],
+    ["e", false]
+];
+
 // returns the actual number of servers to buy that would be better than the ones we already have
 function compareToActualServers(ns: NS, ram: number, numServers: number): number {
     // find the number of servers we own that have ram sizes > ram
-    ns.tprintf("comparing %s %s", ram, numServers);
+    // ns.tprintf("comparing %s %s", ram, numServers);
     const betterServerCount = ns.getPurchasedServers().filter((x) => ns.getServerMaxRam(x) >= ram).length;
     const freeSpots = ns.getPurchasedServerLimit() - betterServerCount;
     return Math.min(numServers, freeSpots);
@@ -35,7 +46,7 @@ function buyServers(ns: NS, ram: number, numServers: number): number {
     }
 
     for (const server of deleteServers) {
-        ns.tprintf("Deleting %s with %d RAM", server, ns.getServerMaxRam(server));
+        if (!options.quiet) ns.tprintf("Deleting %s with %d RAM", server, ns.getServerMaxRam(server));
         ns.killall(server);
         ns.deleteServer(server);
     }
@@ -54,7 +65,7 @@ function buyServers(ns: NS, ram: number, numServers: number): number {
     const cost = ns.getPurchasedServerCost(ram);
     for (let i = 0; i < numServers; i++) {
         const serverName = getNextServerName();
-        ns.tprintf("Buying %s with %d RAM for %s", serverName, ram, ns.nFormat(cost, "($0.000a)"));
+        if (!options.quiet) ns.tprintf("Buying %s with %d RAM for %s", serverName, ram, ns.nFormat(cost, "($0.000a)"));
         ns.purchaseServer(serverName, ram);
     }
 
@@ -62,9 +73,17 @@ function buyServers(ns: NS, ram: number, numServers: number): number {
 }
 
 export async function main(ns: NS): Promise<void> {
+    options = ns.flags(argsSchema);
+
+    options.allow = options.allow !== 1 ? options.allow : options.a;
+    options.quiet = options.quiet || options.q;
+    options.execute = options.execute || options.e;
+
     let maxPow = 8; // Minimum ram is 256
     let sizes: [number, number, number][] = [];
-    const cash = ns.getPlayer().money;
+    const cash = ns.getPlayer().money * options.allow;
+
+    if (cash < 0) return;
     const currentSize = getCurrentRamSize(ns);
 
     while (true) {
@@ -85,7 +104,7 @@ export async function main(ns: NS): Promise<void> {
     }
 
     if (sizes.length === 0) {
-        ns.tprintf("Not enough cash to buy an upgrade");
+        if (!options.quiet) ns.tprintf("Not enough cash to buy an upgrade");
         return;
     }
 
@@ -93,27 +112,29 @@ export async function main(ns: NS): Promise<void> {
     const [ram, numServers, finalSize] = sizes[0];
 
     for (const [ram, numServers, finalSize] of sizes) {
-        ns.tprintf("%s %s %s", ram, numServers, finalSize);
+        if (!options.quiet) ns.tprintf("%s %s %s", ram, numServers, finalSize);
     }
 
-    if (ns.args[0]) {
-        ns.tprintf(
-            "Check: Buying %d %dGB servers, increasing the size from %d to %d for %s",
-            numServers,
-            ram,
-            currentSize,
-            finalSize,
-            ns.nFormat(numServers * ns.getPurchasedServerCost(ram), "($0.000a)")
-        );
+    if (!options.execute) {
+        if (!options.quiet)
+            ns.tprintf(
+                "Check: Buying %d %dGB servers, increasing the size from %d to %d for %s",
+                numServers,
+                ram,
+                currentSize,
+                finalSize,
+                ns.nFormat(numServers * ns.getPurchasedServerCost(ram), "($0.000a)")
+            );
         return;
     }
 
     buyServers(ns, ram, numServers);
 
-    ns.tprintf(
-        "Increased available server ram from %d to %d for %s",
-        currentSize,
-        finalSize,
-        ns.nFormat(numServers * ns.getPurchasedServerCost(ram), "($0.000a)")
-    );
+    if (!options.quiet)
+        ns.tprintf(
+            "Increased available server ram from %d to %d for %s",
+            currentSize,
+            finalSize,
+            ns.nFormat(numServers * ns.getPurchasedServerCost(ram), "($0.000a)")
+        );
 }

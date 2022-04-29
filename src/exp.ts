@@ -28,15 +28,12 @@ export async function main(ns: NS): Promise<void> {
         await ns.scp("/lib/exec/const_weaken.js", "home", server.hostname);
     }
 
-    let pid = 0;
     for (const server of scriptableServers) {
         const availableRam = server.availableRam();
         const availableThreads = Math.floor(availableRam / ns.getScriptRam("/lib/exec/const_weaken.js"));
 
         if (availableThreads <= 0) continue;
 
-        pid = ns.exec("/lib/exec/const_weaken.js", server.hostname, availableThreads, "--target", "joesguns");
+        ns.exec("/lib/exec/const_weaken.js", server.hostname, availableThreads, "--target", "joesguns");
     }
-    
-    ns.tail(pid);
 }

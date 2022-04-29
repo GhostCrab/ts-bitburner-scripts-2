@@ -339,8 +339,8 @@ export class Server implements NSServer {
     }
 
     hackAmountSecurity(threads = 1): number {
-        return this.ns.hackAnalyzeSecurity(threads);
-        //return 0.002 * threads;
+        //return this.ns.hackAnalyzeSecurity(threads);
+        return 0.002 * threads;
     }
 
     growthAmount(player?: Player, growMult?: number, cores?: number): number {
@@ -361,8 +361,8 @@ export class Server implements NSServer {
     }
 
     growthAmountSecurity(threads = 1): number {
-        return this.ns.growthAnalyzeSecurity(threads);
-        //return 0.004 * threads;
+        //return this.ns.growthAnalyzeSecurity(threads);
+        return 0.004 * threads;
     }
 
     growTime(hackOverride?: number, player?: Player): number {

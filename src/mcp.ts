@@ -6,8 +6,9 @@ import { Augmentation } from "lib/augmentation/augmentation";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let options: any;
 const argsSchema: [string, string | number | boolean | string[]][] = [
-    ["a", false],
-    ["n", false],
+    ["a", false], // query all factions, not just the ones we see
+    ["n", false], // include augmentations that are not hack related
+    ["g", false], // execute buys
 ];
 
 // eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types, @typescript-eslint/no-explicit-any,  @typescript-eslint/no-unused-vars
@@ -42,7 +43,7 @@ export async function main(ns: NS): Promise<void> {
         sortedFactions = ALL_FACTIONS.sort((a, b) => ns.getFactionRep(b) - ns.getFactionRep(a));
     }
 
-    sortedFactions = sortedFactions.filter(a => a !== "Church of the Machine God");
+    sortedFactions = sortedFactions.filter((a) => a !== "Church of the Machine God");
 
     let allPurchaseableAugs = [];
     let topFaction = true;
@@ -142,7 +143,7 @@ export async function main(ns: NS): Promise<void> {
     //     let mult = 1;
     //     let total = 0;
     //     for (let aug of allPurchaseableAugs) {
-    //         //if (ns.args[0]) ns.purchaseAugmentation(aug.faction, aug.name);
+    //         //if (options.g) ns.purchaseAugmentation(aug.faction, aug.name);
     //         ns.tprintf(
     //             "%40s - %9s %s",
     //             aug.name,
@@ -156,7 +157,7 @@ export async function main(ns: NS): Promise<void> {
     // }
 
     const buysafe = ns.getPlayer().currentWorkFactionName !== sortedFactions[0];
-    if (!buysafe && ns.args[0]) {
+    if (!buysafe && options.g) {
         ns.tprintf("WARNING: Unable to buy augmentations when actively working for the top faction");
     }
 
@@ -232,7 +233,7 @@ export async function main(ns: NS): Promise<void> {
     mult = 1;
     const startmoney = ns.getPlayer().money;
     for (const aug of affordableAugs) {
-        if (ns.args[0] && buysafe) ns.purchaseAugmentation(aug.faction, aug.name);
+        if (options.g && buysafe) ns.purchaseAugmentation(aug.faction, aug.name);
         ns.tprintf("%50s - %9s %s", aug.name, ns.nFormat(aug.price * mult, "$0.000a"), aug.dep);
         total += aug.price * mult;
         mult *= multmult;
@@ -257,13 +258,13 @@ export async function main(ns: NS): Promise<void> {
             ? (ns.getPlayer().currentWorkFactionName === topFactionForNeuroflux ? ns.getPlayer().workRepGained : 0) +
               ns.getFactionRep(topFactionForNeuroflux)
             : 0;
-    let ngPrice = ns.getAugmentationPrice("NeuroFlux Governor") * (ns.args[0] && buysafe ? 1 : mult);
+    let ngPrice = ns.getAugmentationPrice("NeuroFlux Governor") * (options.g && buysafe ? 1 : mult);
     let ngRepReq = ns.getAugmentationRepReq("NeuroFlux Governor");
     let nfCount = 1;
     let neuroError = false;
     while (true) {
         if (total + ngPrice < startmoney && ngRepReq <= topFactionRep) {
-            if (ns.args[0] && buysafe) {
+            if (options.g && buysafe) {
                 const result = ns.purchaseAugmentation(topFactionForNeuroflux, "NeuroFlux Governor");
                 if (!result) {
                     ns.tprintf("ERROR, could not buy Neuroflux governor");
@@ -293,9 +294,52 @@ export async function main(ns: NS): Promise<void> {
 
     const redPillAug = allPurchaseableAugs.find((a) => a.name === "The Red Pill");
     if (!neuroError && redPillAug) {
-        if (ns.args[0] && buysafe) ns.purchaseAugmentation(redPillAug.faction, redPillAug.name);
+        if (options.g && buysafe) ns.purchaseAugmentation(redPillAug.faction, redPillAug.name);
         ns.tprintf("%50s - %9s %s", "The Red Pill", ns.nFormat(0, "$0.000a"), ns.nFormat(redPillAug.rep, "0.000a"));
     }
 
     ns.tprintf("\n%50s - %9s (%s)", "Total", ns.nFormat(total, "$0.000a"), ns.nFormat(total + ngPrice, "$0.000a"));
+
+    if (options.n && options.g) {
+        // find a faction with donation favor
+        const joinedFactions = ns.getPlayer().factions;
+        let targetFaction = "";
+        for (const faction of joinedFactions) {
+            if (ns.getFactionFavor(faction) >= ns.getFavorToDonate()) {
+                targetFaction = faction;
+                break;
+            }
+        }
+
+        if (targetFaction !== "") {
+            while (true) {
+                const aug = new Augmentation(ns, "NeuroFlux Governor", targetFaction);
+
+                if (aug.price > ns.getPlayer().money) break;
+
+                if (aug.purchaseable) {
+                    if (ns.purchaseAugmentation(aug.faction, aug.name))
+                        continue;
+                    else
+                        break;
+                }
+
+                const repDiff = aug.rep - ns.getFactionRep(targetFaction);
+                const donateAmt = 1e6 * (repDiff / ns.getPlayer().faction_rep_mult);
+
+                if (donateAmt > ns.getPlayer().money) break;
+                ns.donateToFaction(targetFaction, donateAmt);
+
+                if (aug.price > ns.getPlayer().money) break;
+                ns.purchaseAugmentation(aug.faction, aug.name);
+
+                ns.tprintf(
+                    "Donated %s for %d rep and paid %s for a level of NeuroFlux Governor",
+                    ns.nFormat(donateAmt, "$0.000a"),
+                    repDiff,
+                    ns.nFormat(aug.price, "$0.000a")
+                );
+            }
+        }
+    }
 }

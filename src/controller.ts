@@ -13,51 +13,17 @@ function favorToRep(f: number) {
 export async function main(ns: NS): Promise<void> {
     ns.disableLog("disableLog");
     ns.disableLog("sleep");
-    ns.tail();
+    //ns.tail();
     const serverService = new ServerService(ns);
 
     if (ns.getRunningScript("clock.js", "home") === null) ns.exec("clock.js", "home");
 
     let doExp = true;
     //const msToRep = 0;
+    let doServerBuys = true;
     while (true) {
         const hackPID = ns.exec("hack.js", "home", 1, "--limit", 10, "--rounds", 1);
         while (ns.getRunningScript(hackPID) !== null) await ns.sleep(100);
-
-        const servers = serverService.getScriptableServers(HOME_RESERVE_RAM);
-        const availableRamBefore = servers.reduce((tally, server) => tally + server.availableRam(), 0);
-
-        doBuyAndSoftenAll(ns);
-
-        if (ns.getPlayer().money * 0.25 > ns.getUpgradeHomeRamCost()) ns.upgradeHomeRam();
-
-        if (ns.getPlayer().money < 100000000000) {
-            const bsaPID = ns.exec("buy_server_all.js", "home", 1, "-qe");
-            while (ns.getRunningScript(bsaPID) !== null) await ns.sleep(100);
-        } else {
-            const bsaPID = ns.exec("buy_server_all.js", "home", 1, "--allow", 0.25, "-qe");
-            while (ns.getRunningScript(bsaPID) !== null) await ns.sleep(100);
-        }
-
-        const availableRamAfter = servers.reduce((tally, server) => tally + server.availableRam(), 0);
-
-        if (availableRamBefore < availableRamAfter || doExp) {
-            doExp = false;
-
-            ns.exec("exp.js", "home", 1, "--reserve", HOME_RESERVE_RAM);
-            await ns.sleep(60 * 1000);
-
-            // kill all weaken scripts
-            const allHostnames = allHosts(ns);
-
-            for (const hostname of allHostnames) {
-                const processes = ns.ps(hostname).filter((a) => a.filename === CONSTWEAKENJS);
-
-                for (const process of processes) {
-                    ns.kill(process.pid);
-                }
-            }
-        }
 
         if (ns.getPlayer().money > 100000000) {
             const joinPID = ns.exec("join.js", "home", 1, "-c");
@@ -81,30 +47,37 @@ export async function main(ns: NS): Promise<void> {
             {
                 faction: "Tian Di Hui",
                 aug: "Social Negotiation Assistant (S.N.A)",
+                goal: 400000000,
             },
             {
                 faction: "CyberSec",
                 aug: "Cranial Signal Processors - Gen I",
+                goal: 500000000,
             },
             {
                 faction: "NiteSec",
                 aug: "CRTX42-AA Gene Modification",
+                goal: 25000000000,
             },
             {
                 faction: "The Black Hand",
                 aug: "The Black Hand",
-            },
-            {
-                faction: "BitRunners",
-                aug: "Embedded Netburner Module Core V2 Upgrade",
-            },
-            {
-                faction: "Daedalus",
-                aug: "The Red Pill",
+                goal: 30000000000,
             },
             {
                 faction: "Chongqing",
                 aug: "Neuregen Gene Modification",
+                goal: 400000000,
+            },
+            {
+                faction: "BitRunners",
+                aug: "Embedded Netburner Module Core V2 Upgrade",
+                goal: 5.5e12,
+            },
+            {
+                faction: "Daedalus",
+                aug: "The Red Pill",
+                goal: 100000000000,
             },
         ];
 
@@ -169,6 +142,11 @@ export async function main(ns: NS): Promise<void> {
                             doInstall = true;
                         }
                     }
+
+                    if (ns.getPlayer().money < augTarget.goal) {
+                        if (doInstall) doServerBuys = false;
+                        doInstall = false;
+                    }
                 }
 
                 break;
@@ -213,6 +191,41 @@ export async function main(ns: NS): Promise<void> {
             const donateAmt = 1e6 * (ngRepReq / ns.getPlayer().faction_rep_mult);
             if (donateAmt + total <= ns.getPlayer().money) {
                 ns.exec("reset.js", "home", 1);
+            }
+        }
+
+        const servers = serverService.getScriptableServers(HOME_RESERVE_RAM);
+        const availableRamBefore = servers.reduce((tally, server) => tally + server.availableRam(), 0);
+
+        doBuyAndSoftenAll(ns);
+
+        if (ns.getPlayer().money * 0.25 > ns.getUpgradeHomeRamCost()) ns.upgradeHomeRam();
+
+        if (ns.getPlayer().money < 100000000000 && doServerBuys) {
+            const bsaPID = ns.exec("buy_server_all.js", "home", 1, "-qe");
+            while (ns.getRunningScript(bsaPID) !== null) await ns.sleep(100);
+        } else {
+            const bsaPID = ns.exec("buy_server_all.js", "home", 1, "--allow", 0.25, "-qe");
+            while (ns.getRunningScript(bsaPID) !== null) await ns.sleep(100);
+        }
+
+        const availableRamAfter = servers.reduce((tally, server) => tally + server.availableRam(), 0);
+
+        if (availableRamBefore < availableRamAfter || doExp) {
+            doExp = false;
+
+            ns.exec("exp.js", "home", 1, "--reserve", HOME_RESERVE_RAM);
+            await ns.sleep(60 * 1000);
+
+            // kill all weaken scripts
+            const allHostnames = allHosts(ns);
+
+            for (const hostname of allHostnames) {
+                const processes = ns.ps(hostname).filter((a) => a.filename === CONSTWEAKENJS);
+
+                for (const process of processes) {
+                    ns.kill(process.pid);
+                }
             }
         }
 

@@ -86,6 +86,7 @@ export async function main(ns: NS): Promise<void> {
         for (const augTarget of augTargets) {
             const targetAug = new Augmentation(ns, augTarget.aug, augTarget.faction);
             if (!targetAug.owned) {
+                let overrideDoInstall = false;
                 allInstalled = false;
                 if (ns.checkFactionInvitations().includes(augTarget.faction)) ns.joinFaction(augTarget.faction);
                 ns.workForFaction(augTarget.faction, "Hacking Contracts", true);
@@ -117,7 +118,10 @@ export async function main(ns: NS): Promise<void> {
                             stFormat(ns, msToRep)
                         );
                     }
-                    if (totalRep >= targetRep15Percent && favor < 25) doInstall = true;
+                    if (totalRep >= targetRep15Percent && favor < 25) {
+                        overrideDoInstall = true;
+                        doInstall = true;
+                    }
 
                     // second pass
                     if (totalRep < targetRep && favor < ns.getFavorToDonate()) {
@@ -132,7 +136,10 @@ export async function main(ns: NS): Promise<void> {
                             stFormat(ns, msToRep)
                         );
                     }
-                    if (totalRep > targetRep && favor < ns.getFavorToDonate()) doInstall = true;
+                    if (totalRep > targetRep && favor < ns.getFavorToDonate()) {
+                        overrideDoInstall = true;
+                        doInstall = true;
+                    }
 
                     // third pass
                     if (favor > ns.getFavorToDonate() && currentRep < targetAug.rep) {
@@ -143,7 +150,7 @@ export async function main(ns: NS): Promise<void> {
                         }
                     }
 
-                    if (ns.getPlayer().money < augTarget.goal) {
+                    if (ns.getPlayer().money < augTarget.goal && !overrideDoInstall) {
                         if (doInstall) doServerBuys = false;
                         doInstall = false;
                     }

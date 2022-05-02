@@ -323,8 +323,8 @@ export class Server implements NSServer {
     }
 
     hackLevelForTime(ms: number, player?: Player): number {
-        // if (player && this.ns.fileExists("Formulas.exe", "home"))
-        //     return this.ns.formulas.hacking.hackLevelForTime(this, player, ms);
+        if (player && this.ns.fileExists("Formulas.exe", "home"))
+            return this.ns.formulas.hacking.hackLevelForTime(this, player, ms);
 
         const hacking = player ? player.hacking : this.ns.getHackingLevel();
 
@@ -373,8 +373,8 @@ export class Server implements NSServer {
     }
 
     growLevelForTime(ms: number, player?: Player): number {
-        // if (player && this.ns.fileExists("Formulas.exe", "home"))
-        //     return this.ns.formulas.hacking.growLevelForTime(this, player, ms);
+        if (player && this.ns.fileExists("Formulas.exe", "home"))
+            return this.ns.formulas.hacking.growLevelForTime(this, player, ms);
 
         const hacking = player ? player.hacking : this.ns.getHackingLevel();
 
@@ -402,8 +402,8 @@ export class Server implements NSServer {
     }
 
     weakenLevelForTime(ms: number, player?: Player): number {
-        // if (player && this.ns.fileExists("Formulas.exe", "home"))
-        //     return this.ns.formulas.hacking.weakenLevelForTime(this, player, ms);
+        if (player && this.ns.fileExists("Formulas.exe", "home"))
+            return this.ns.formulas.hacking.weakenLevelForTime(this, player, ms);
 
         const hacking = player ? player.hacking : this.ns.getHackingLevel();
 

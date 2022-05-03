@@ -47,37 +47,37 @@ export async function main(ns: NS): Promise<void> {
             {
                 faction: "Tian Di Hui",
                 aug: "Social Negotiation Assistant (S.N.A)",
-                goal: 400000000,
+                goal: 1231636000, // 1.23b
             },
             {
                 faction: "CyberSec",
                 aug: "Cranial Signal Processors - Gen I",
-                goal: 500000000,
+                goal: 1068960000, // 1.06b
             },
             {
                 faction: "NiteSec",
                 aug: "CRTX42-AA Gene Modification",
-                goal: 25000000000,
+                goal: 77900176255, // 77.9b
             },
             {
                 faction: "The Black Hand",
                 aug: "The Black Hand",
-                goal: 30000000000,
+                goal: 93390264000, // 99.3b
             },
             {
                 faction: "Chongqing",
                 aug: "Neuregen Gene Modification",
-                goal: 400000000,
+                goal: 1465000000, // 1.46b
             },
             {
                 faction: "BitRunners",
                 aug: "Embedded Netburner Module Core V2 Upgrade",
-                goal: 5.5e12,
+                goal: 19187353631585, // 19.18t + donations
             },
             {
                 faction: "Daedalus",
                 aug: "The Red Pill",
-                goal: 100000000000,
+                goal: 92750000000, // 92b + donations
             },
         ];
 
@@ -208,8 +208,8 @@ export async function main(ns: NS): Promise<void> {
 
         if (ns.getPlayer().money * 0.25 > ns.getUpgradeHomeRamCost()) ns.upgradeHomeRam();
 
-        if (ns.getPlayer().money < 100000000000 && doServerBuys) {
-            const bsaPID = ns.exec("buy_server_all.js", "home", 1, "-qe");
+        if (ns.getPlayer().money < 1000000000 && doServerBuys) {
+            const bsaPID = ns.exec("buy_server_all.js", "home", 1, "--allow", 0.5, "-qe");
             while (ns.getRunningScript(bsaPID) !== null) await ns.sleep(100);
         } else {
             const bsaPID = ns.exec("buy_server_all.js", "home", 1, "--allow", 0.25, "-qe");

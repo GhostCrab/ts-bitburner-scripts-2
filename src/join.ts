@@ -109,43 +109,43 @@ class Faction {
         // location check
         if (enforceLocation && this.requirements.locations) {
             if (Array.isArray(this.requirements.locations)) {
-                passed &= this.requirements.locations.includes(ns.getPlayer().location);
+                passed &&= this.requirements.locations.includes(ns.getPlayer().location);
             } else {
-                passed &= this.requirements.locations === ns.getPlayer().location;
+                passed &&= this.requirements.locations === ns.getPlayer().location;
             }
         }
 
-        if (this.requirements.daedalus) {
-            passed &=
+        if (this.requirements.daedalus && this.requirements.money && this.requirements.hacking) {
+            passed &&=
                 ns.getPlayer().money >= this.requirements.money || ns.getPlayer().hacking >= this.requirements.hacking;
         } else {
             // money check
             if (this.requirements.money) {
-                passed &= ns.getPlayer().money >= this.requirements.money;
+                passed &&= ns.getPlayer().money >= this.requirements.money;
             }
 
             // hacking check
             if (this.requirements.hacking) {
-                passed &= ns.getPlayer().hacking >= this.requirements.hacking;
+                passed &&= ns.getPlayer().hacking >= this.requirements.hacking;
             }
         }
 
         // karma check
         if (this.requirements.karma) {
-            passed &= ns.heart.break() <= this.requirements.karma;
+            passed &&= ns.heart.break() <= this.requirements.karma;
         }
 
         // combat check
         if (this.requirements.combat) {
-            passed &= ns.getPlayer().strength >= this.requirements.combat;
-            passed &= ns.getPlayer().defense >= this.requirements.combat;
-            passed &= ns.getPlayer().dexterity >= this.requirements.combat;
-            passed &= ns.getPlayer().agility >= this.requirements.combat;
+            passed &&= ns.getPlayer().strength >= this.requirements.combat;
+            passed &&= ns.getPlayer().defense >= this.requirements.combat;
+            passed &&= ns.getPlayer().dexterity >= this.requirements.combat;
+            passed &&= ns.getPlayer().agility >= this.requirements.combat;
         }
 
         // murder check
         if (this.requirements.murder) {
-            passed &= ns.getPlayer().numPeopleKilled >= this.requirements.murder;
+            passed &&= ns.getPlayer().numPeopleKilled >= this.requirements.murder;
         }
 
         // law check
@@ -155,7 +155,7 @@ class Faction {
 
         // augmentations check
         if (this.requirements.augmentations) {
-            passed &= ns.getOwnedAugmentations().length >= this.requirements.augmentations;
+            passed &&= ns.getOwnedAugmentations().length >= this.requirements.augmentations;
         }
 
         // corporation check
@@ -176,7 +176,7 @@ class Faction {
         // backdoor check
         if (this.requirements.backdoor) {
             if (this.name !== "Fulcrum Secret Technologies")
-                passed &= await doBackdoor(ns, this.requirements.backdoor);
+                passed &&= await doBackdoor(ns, this.requirements.backdoor);
             else
                 passed = false;
         }

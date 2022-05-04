@@ -134,7 +134,8 @@ export async function doBackdoor(ns: NS, hostname: string): Promise<boolean> {
     if (server.backdoorInstalled) return true;
 
     if (server.requiredHackingSkill > ns.getHackingLevel()) {
-        ns.tprintf(
+        llog(
+            ns,
             "Unable to backdoor server %s - Hacking level %d < %d",
             hostname,
             ns.getHackingLevel(),
@@ -144,7 +145,8 @@ export async function doBackdoor(ns: NS, hostname: string): Promise<boolean> {
     }
 
     if (!server.hasAdminRights && !softenServer(ns, hostname)) {
-        ns.tprintf(
+        llog(
+            ns,
             "Unable to backdoor server %s - Unable to obtain admin rights",
             hostname,
             ns.getHackingLevel(),

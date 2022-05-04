@@ -1,345 +1,293 @@
 import { NS } from "@ns";
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { doBuyAndSoftenAll, doBackdoors, stFormat, ALL_FACTIONS } from "lib/util";
-import { Augmentation } from "lib/augmentation/augmentation";
+import { Augmentation } from "/lib/augmentation/augmentation";
+import { allHosts, CONSTWEAKENJS, doBuyAndSoftenAll, stFormat } from "/lib/util";
+import { ServerService } from "/services/server";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let options: any;
-const argsSchema: [string, string | number | boolean | string[]][] = [
-    ["a", false], // query all factions, not just the ones we see
-    ["n", false], // include augmentations that are not hack related
-    ["g", false], // execute buys
-];
+enum ControllerState {
+    init,
+    hack,
+    join,
+    buying,
+}
 
-// eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types, @typescript-eslint/no-explicit-any,  @typescript-eslint/no-unused-vars
-export function autocomplete(data: any, args: string[]): string[] {
-    data.flags(argsSchema);
-    return ["-a", "-n", "-an"];
+const CS = ControllerState;
+
+const HOME_RESERVE_RAM = 128;
+
+function favorToRep(f: number) {
+    const raw = 25000 * (Math.pow(1.02, f) - 1);
+    return Math.round(raw * 10000) / 10000; // round to make things easier.
 }
 
 export async function main(ns: NS): Promise<void> {
-    try {
-        options = ns.flags(argsSchema);
-    } catch (e) {
-        ns.tprintf("ERROR: %s", e);
-        return;
-    }
+    ns.disableLog("disableLog");
+    ns.disableLog("sleep");
+    //ns.tail();
+    const serverService = new ServerService(ns);
 
-    doBuyAndSoftenAll(ns);
-    await doBackdoors(ns);
+    if (ns.getRunningScript("clock.js", "home") === null) ns.exec("clock.js", "home");
 
-    let sortedFactions: string[];
-    if (!options.a) {
-        const player = ns.getPlayer();
-
-        const checkFactions = player.factions.concat(ns.checkFactionInvitations());
-        sortedFactions = checkFactions.sort(
-            (a, b) =>
-                (ns.getPlayer().currentWorkFactionName === b ? ns.getPlayer().workRepGained : 0) +
-                ns.getFactionRep(b) -
-                ((ns.getPlayer().currentWorkFactionName === a ? ns.getPlayer().workRepGained : 0) + ns.getFactionRep(a))
-        );
-    } else {
-        sortedFactions = ALL_FACTIONS.sort((a, b) => ns.getFactionRep(b) - ns.getFactionRep(a));
-    }
-
-    sortedFactions = sortedFactions.filter((a) => a !== "Church of the Machine God");
-
-    let allPurchaseableAugs = [];
-    let topFaction = true;
-    for (const faction of sortedFactions) {
-        const augs = ns
-            .getAugmentationsFromFaction(faction)
-            .map((name) => {
-                return new Augmentation(ns, name, faction);
-            })
-            .sort((a, b) => a.rep - b.rep);
-        const augsToBuy = [];
-        for (const aug of augs) {
-            if (aug.isHackUseful(options.n) && !aug.owned) {
-                augsToBuy.push(aug);
-            }
-            if (aug.isHackUseful(options.n) && aug.purchaseable && !aug.owned && !aug.installed) {
-                allPurchaseableAugs.push(aug);
-            }
-        }
-
-        if (augsToBuy.length === 0 && !topFaction) continue;
-
-        ns.tprintf(
-            "%s (rep: %d):",
-            faction,
-            (ns.getPlayer().currentWorkFactionName === faction ? ns.getPlayer().workRepGained : 0) +
-                ns.getFactionRep(faction)
-        );
-        for (const aug of augsToBuy) {
-            ns.tprintf("  %s", aug);
-            // printAugStats(aug.stats);
-        }
-
-        topFaction = false;
-    }
-
-    for (let i = 0; i < allPurchaseableAugs.length; i++) {
-        const checkName = allPurchaseableAugs[i].name;
-        let j = i + 1;
-        while (j < allPurchaseableAugs.length) {
-            if (allPurchaseableAugs[j].name === checkName) {
-                allPurchaseableAugs.splice(j, 1);
-            } else {
-                j++;
-            }
-        }
-    }
-
-    allPurchaseableAugs = allPurchaseableAugs.sort((a, b) => b.price - a.price);
-
-    // reorder array to buy dependent augs first and purge augs that cant be bought
-    // because of a missing dependency, need to loop multiple times until no more dependencies are found
+    let state = CS.init;
+    let waitPID = 0;
+    let doExp = true;
+    let doServerBuys = true;
     while (true) {
-        let didDepMove = false;
-        for (let i = 0; i < allPurchaseableAugs.length; i++) {
-            const augName = allPurchaseableAugs[i].name;
-            const depName = allPurchaseableAugs[i].dep;
-            if (depName === "") continue;
+        // check waitPID for a state switch;
+        if (ns.getRunningScript(waitPID) === null) {
+            waitPID = 0;
+            switch(state) {
+                case CS.init:
+                    state = CS.hack;
+                    break;
+                case CS.hack:
+                    state = CS.join;
+                    break;
+                case CS.join:
+                    state = CS.buying;
+                    break;
+                case CS.buying:
+                    state = CS.hack;
+                    break;
+            }
+        }
 
-            let foundDep = false;
-            // check to see if we've already re-organized this dep and it is placed higher in the queue
-            for (let k = 0; k < i; k++) {
-                if (allPurchaseableAugs[k].name === depName) {
-                    foundDep = true;
+        if (waitPID === 0) {
+            switch(state) {
+                case CS.hack:
+                    waitPID = ns.exec("hack.js", "home", 1, "--limit", 10, "--rounds", 1);
+                    break;
+                case CS.join:
+                    break;
+    
+            }
+        }
+        
+        const hackPID = ns.exec("hack.js", "home", 1, "--limit", 10, "--rounds", 1);
+        while (ns.getRunningScript(hackPID) !== null) await ns.sleep(100);
+
+        if (ns.getPlayer().money > 100000000) {
+            const joinPID = ns.exec("join.js", "home", 1, "-c");
+            while (ns.getRunningScript(joinPID) !== null) await ns.sleep(100);
+        }
+
+        // check to see what faction should be targeted
+        // 1) tian di hui 6.25k - Social Negotiation Assistant (S.N.A)
+        // 2) cybersec to 10k - Cranial Signal Processors - Gen I
+        // 3) Nitesec 45k - CRTX42-AA Gene Modification
+        // 4) The Black Hand 100k
+        // 5) Bitrunners 65k
+        // 6) Bitrunners 385k
+        // 7) Bitrunners Bribe
+        // 8) Daedalus 65k
+        // 9) Daedalus 385k
+        // 10) Daedalus Bribe
+        // 11) World Daemon
+
+        const augTargets = [
+            {
+                faction: "Tian Di Hui",
+                aug: "Social Negotiation Assistant (S.N.A)"
+            },
+            {
+                faction: "CyberSec",
+                aug: "Cranial Signal Processors - Gen I"
+            },
+            {
+                faction: "NiteSec",
+                aug: "CRTX42-AA Gene Modification"
+            },
+            {
+                faction: "The Black Hand",
+                aug: "The Black Hand"
+            },
+            {
+                faction: "Chongqing",
+                aug: "Neuregen Gene Modification"
+            },
+            {
+                faction: "BitRunners",
+                aug: "Embedded Netburner Module Core V2 Upgrade"
+            },
+            {
+                faction: "Daedalus",
+                aug: "The Red Pill"
+            },
+        ];
+
+        let doInstall = false;
+        let allInstalled = true;
+        for (const augTarget of augTargets) {
+            const targetAug = new Augmentation(ns, augTarget.aug, augTarget.faction);
+            const augs = ns
+                .getAugmentationsFromFaction(augTarget.faction)
+                .map((name) => {
+                    return new Augmentation(ns, name, augTarget.faction);
+                })
+                .filter((a) => a.rep <= targetAug.rep && !a.owned && !a.installed)
+                .sort((a, b) => a.rep - b.rep);
+            let goalCost = 0;
+            let multpow = 0;
+            const srcFile11 = ns.getOwnedSourceFiles().find((x) => x.n === 11);
+            const srcFile11Lvl = srcFile11 ? srcFile11.lvl : 0;
+            const multmult = 1.9 * [1, 0.96, 0.94, 0.93][srcFile11Lvl];
+            for (const aug of augs) {
+                goalCost += aug.price * Math.pow(multmult, multpow);
+                multpow++;
+            }
+
+            if (!targetAug.owned) {
+                let overrideDoInstall = false;
+                allInstalled = false;
+                if (ns.checkFactionInvitations().includes(augTarget.faction)) ns.joinFaction(augTarget.faction);
+                ns.workForFaction(augTarget.faction, "Hacking Contracts", true);
+
+                if (targetAug.purchaseable) doInstall = true;
+
+                if (targetAug.rep > favorToRep(ns.getFavorToDonate())) {
+                    const favor = ns.getFactionFavor(augTarget.faction);
+                    const targetRep = favorToRep(ns.getFavorToDonate());
+                    const currentRep =
+                        ns.getFactionRep(augTarget.faction) +
+                        (ns.getPlayer().currentWorkFactionName === augTarget.faction
+                            ? ns.getPlayer().workRepGained
+                            : 0);
+                    const storedRep = Math.max(0, favorToRep(favor));
+                    const targetRep15Percent = targetRep * 0.15;
+                    const totalRep = currentRep + storedRep;
+
+                    // first pass
+                    if (totalRep < targetRep15Percent && favor < 25) {
+                        const repGainPerMS = (ns.getPlayer().workRepGainRate * 5) / 1000;
+                        const msToRep = (targetRep15Percent - totalRep) / repGainPerMS;
+
+                        ns.tprintf(
+                            "Time For %s %d => %d: %s",
+                            augTarget.faction,
+                            totalRep,
+                            targetRep15Percent,
+                            stFormat(ns, msToRep)
+                        );
+                    }
+                    if (totalRep >= targetRep15Percent && favor < 25) {
+                        overrideDoInstall = true;
+                        doInstall = true;
+                    }
+
+                    // second pass
+                    if (totalRep < targetRep && favor < ns.getFavorToDonate()) {
+                        const repGainPerMS = (ns.getPlayer().workRepGainRate * 5) / 1000;
+                        const msToRep = (targetRep - totalRep) / repGainPerMS;
+
+                        ns.tprintf(
+                            "Time For %s %d => %d: %s",
+                            augTarget.faction,
+                            totalRep,
+                            targetRep,
+                            stFormat(ns, msToRep)
+                        );
+                    }
+                    if (totalRep > targetRep && favor < ns.getFavorToDonate()) {
+                        overrideDoInstall = true;
+                        doInstall = true;
+                    }
+
+                    // third pass
+                    if (favor > ns.getFavorToDonate() && currentRep < targetAug.rep) {
+                        const donateAmt = 1e6 * ((targetAug.rep - currentRep) / ns.getPlayer().faction_rep_mult);
+                        if (donateAmt < ns.getPlayer().money) {
+                            ns.donateToFaction(augTarget.faction, donateAmt);
+                            doInstall = true;
+                        } else {
+                            goalCost += donateAmt;
+                        }
+                    }
+
+                    if (ns.getPlayer().money < goalCost && !overrideDoInstall) {
+                        ns.tprintf("Controller: Target Cash %s", ns.nFormat(goalCost, "$0.000a"),)
+                        if (doInstall) doServerBuys = false;
+                        doInstall = false;
+                    }
                 }
-            }
-            if (foundDep) continue;
 
-            const depLoc = allPurchaseableAugs.findIndex((a) => a.name === depName);
-            if (depLoc >= 0) {
-                const tmp = allPurchaseableAugs[depLoc];
-                // remove aug from current place
-                allPurchaseableAugs.splice(depLoc, 1);
-                // place it before the main aug
-                const curLoc = allPurchaseableAugs.findIndex((a) => a.name === augName);
-                allPurchaseableAugs.splice(curLoc, 0, tmp);
-                foundDep = true;
-                didDepMove = true;
-            }
-
-            // if we dont have the dependency queued, remove this aug from the buy list
-            if (!foundDep) {
-                ns.tprintf(
-                    "WARNING: Unable to find dependency %s:%s in the queue",
-                    allPurchaseableAugs[i].name,
-                    allPurchaseableAugs[i].dep
-                );
-                allPurchaseableAugs.splice(i, 1);
-            }
-        }
-
-        if (!didDepMove) break;
-    }
-
-    // if (allPurchaseableAugs.length > 0) {
-    //     ns.tprintf("============================");
-    //     let mult = 1;
-    //     let total = 0;
-    //     for (let aug of allPurchaseableAugs) {
-    //         //if (options.g) ns.purchaseAugmentation(aug.faction, aug.name);
-    //         ns.tprintf(
-    //             "%40s - %9s %s",
-    //             aug.name,
-    //             ns.nFormat(aug.price * mult, "$0.000a"),
-    //             aug.dep !== undefined ? aug.dep : ""
-    //         );
-    //         total += aug.price * mult;
-    //         mult *= 1.9;
-    //     }
-    //     ns.tprintf("\n%40s - %9s", "Total", ns.nFormat(total, "$0.000a"));
-    // }
-
-    const buysafe = ns.getPlayer().currentWorkFactionName !== sortedFactions[0];
-    if (!buysafe && options.g) {
-        ns.tprintf("WARNING: Unable to buy augmentations when actively working for the top faction");
-    }
-
-    let mult = 1;
-    const srcFile11 = ns.getOwnedSourceFiles().find((x) => x.n === 11);
-    const srcFile11Lvl = srcFile11 ? srcFile11.lvl : 0;
-    const multmult = 1.9 * [1, 0.96, 0.94, 0.93][srcFile11Lvl];
-    let total = Number.MAX_SAFE_INTEGER;
-    let startAug = 0;
-    const purchaseableAugs = allPurchaseableAugs.filter((a) => a.name !== "The Red Pill");
-    while (startAug < purchaseableAugs.length) {
-        total = 0;
-        mult = 1;
-        for (let augIdx = startAug; augIdx < purchaseableAugs.length; augIdx++) {
-            total += purchaseableAugs[augIdx].price * mult;
-            mult *= multmult;
-        }
-
-        if (total < ns.getPlayer().money) break;
-
-        startAug++;
-    }
-
-    let affordableAugs = purchaseableAugs.slice(startAug);
-
-    // check if affordableAugs includes deps if they're not already installed
-    let redoUpdate = false;
-    for (const aug of affordableAugs) {
-        const depName = aug.dep;
-        if (depName === "") continue;
-        if (ns.getOwnedAugmentations(true).includes(depName)) continue;
-
-        let depAug = affordableAugs.find((a) => a.name === depName);
-        if (depAug === undefined) {
-            // dependency is not installed, and not in the list to be installed, pull it from purchaseableAugs
-            depAug = purchaseableAugs.find((a) => a.name === depName);
-            if (depAug === undefined) {
-                ns.tprintf(
-                    "ERROR: Unable to find dependency aug in the purchaseableAugs " +
-                        "array even though it should be there %s | %s"
-                );
-                return;
-            }
-            const thisAugIdx = affordableAugs.findIndex((a) => a.name === aug.name);
-            affordableAugs.splice(thisAugIdx, 0, depAug);
-            redoUpdate = true;
-        }
-    }
-
-    if (redoUpdate) {
-        startAug = 0;
-        while (startAug < affordableAugs.length) {
-            total = 0;
-            mult = 1;
-            for (let augIdx = startAug; augIdx < affordableAugs.length; augIdx++) {
-                total += affordableAugs[augIdx].price * mult;
-                mult *= multmult;
-            }
-
-            if (total < ns.getPlayer().money) break;
-
-            startAug++;
-        }
-
-        affordableAugs = affordableAugs.slice(startAug);
-    }
-
-    //if (affordableAugs.length === 0) return;
-
-    ns.tprintf("============================");
-
-    total = 0;
-    mult = 1;
-    const startmoney = ns.getPlayer().money;
-    for (const aug of affordableAugs) {
-        if (options.g && buysafe) ns.purchaseAugmentation(aug.faction, aug.name);
-        ns.tprintf("%50s - %9s %s", aug.name, ns.nFormat(aug.price * mult, "$0.000a"), aug.dep);
-        total += aug.price * mult;
-        mult *= multmult;
-    }
-
-    // see how many Neuroflux Governors we can buy
-    let neurofluxFactionIdx = 0;
-    while (neurofluxFactionIdx < sortedFactions.length) {
-        if (ns.gang.inGang() && ns.gang.getGangInformation().faction === sortedFactions[neurofluxFactionIdx]) {
-            neurofluxFactionIdx++;
-        } else if (sortedFactions[neurofluxFactionIdx] === "Bladeburners") {
-            neurofluxFactionIdx++;
-        } else {
-            break;
-        }
-    }
-
-    const topFactionForNeuroflux =
-        neurofluxFactionIdx >= sortedFactions.length ? "" : sortedFactions[neurofluxFactionIdx];
-    const topFactionRep =
-        topFactionForNeuroflux !== ""
-            ? (ns.getPlayer().currentWorkFactionName === topFactionForNeuroflux ? ns.getPlayer().workRepGained : 0) +
-              ns.getFactionRep(topFactionForNeuroflux)
-            : 0;
-    let ngPrice = ns.getAugmentationPrice("NeuroFlux Governor") * (options.g && buysafe ? 1 : mult);
-    let ngRepReq = ns.getAugmentationRepReq("NeuroFlux Governor");
-    let nfCount = 1;
-    let neuroError = false;
-    while (true) {
-        if (total + ngPrice < startmoney && ngRepReq <= topFactionRep) {
-            if (options.g && buysafe) {
-                const result = ns.purchaseAugmentation(topFactionForNeuroflux, "NeuroFlux Governor");
-                if (!result) {
-                    ns.tprintf("ERROR, could not buy Neuroflux governor");
-                    neuroError = true;
-                }
-            }
-            ns.tprintf(
-                "%50s - %9s %s",
-                "NeuroFlux Governor +" + nfCount.toString(),
-                ns.nFormat(ngPrice, "$0.000a"),
-                ns.nFormat(ngRepReq, "0.000a")
-            );
-            nfCount++;
-            total += ngPrice;
-            ngPrice = ngPrice * 1.14 * multmult;
-            ngRepReq *= 1.14;
-        } else {
-            ns.tprintf(
-                "%50s - %9s %s)",
-                "(NeuroFlux Governor +" + nfCount.toString(),
-                ns.nFormat(ngPrice, "$0.000a"),
-                ns.nFormat(ngRepReq, "0.000a")
-            );
-            break;
-        }
-    }
-
-    const redPillAug = allPurchaseableAugs.find((a) => a.name === "The Red Pill");
-    if (!neuroError && redPillAug) {
-        if (options.g && buysafe) ns.purchaseAugmentation(redPillAug.faction, redPillAug.name);
-        ns.tprintf("%50s - %9s %s", "The Red Pill", ns.nFormat(0, "$0.000a"), ns.nFormat(redPillAug.rep, "0.000a"));
-    }
-
-    ns.tprintf("\n%50s - %9s (%s)", "Total", ns.nFormat(total, "$0.000a"), ns.nFormat(total + ngPrice, "$0.000a"));
-
-    if (options.n && options.g) {
-        // find a faction with donation favor
-        const joinedFactions = ns.getPlayer().factions;
-        let targetFaction = "";
-        for (const faction of joinedFactions) {
-            if (ns.getFactionFavor(faction) >= ns.getFavorToDonate()) {
-                targetFaction = faction;
                 break;
             }
         }
 
-        if (targetFaction !== "") {
-            while (true) {
-                const aug = new Augmentation(ns, "NeuroFlux Governor", targetFaction);
+        if (doInstall) {
+            ns.stopAction();
 
-                if (aug.price > ns.getPlayer().money) break;
+            const mcpPID = ns.exec("buy_augs.js", "home", 1, "-g");
+            while (ns.getRunningScript(mcpPID) !== null) await ns.sleep(10);
 
-                if (aug.purchaseable) {
-                    if (ns.purchaseAugmentation(aug.faction, aug.name))
-                        continue;
-                    else
-                        break;
-                }
+            const joinPID = ns.exec("join.js", "home", 1);
+            while (ns.getRunningScript(joinPID) !== null) await ns.sleep(10);
 
-                const repDiff = aug.rep - ns.getFactionRep(targetFaction);
-                const donateAmt = 1e6 * (repDiff / ns.getPlayer().faction_rep_mult);
+            const cctPID = ns.exec("cct.js", "home", 1);
+            while (ns.getRunningScript(cctPID) !== null) await ns.sleep(10);
 
-                if (donateAmt > ns.getPlayer().money) break;
-                ns.donateToFaction(targetFaction, donateAmt);
+            ns.exec("reset.js", "home", 1);
+        }
 
-                if (aug.price > ns.getPlayer().money) break;
-                ns.purchaseAugmentation(aug.faction, aug.name);
+        if (allInstalled) {
+            // if we have the red pill and we can hack the world daemon, ascend
+            if (ns.getHackingLevel() >= ns.getServerRequiredHackingLevel("w0r1d_d43m0n"))
+                ns.exec("ascend.js", "home", 1);
 
-                ns.tprintf(
-                    "Donated %s for %d rep and paid %s for a level of NeuroFlux Governor",
-                    ns.nFormat(donateAmt, "$0.000a"),
-                    repDiff,
-                    ns.nFormat(aug.price, "$0.000a")
-                );
+            // level up until we can hack the world daemon
+            const srcFile11 = ns.getOwnedSourceFiles().find((x) => x.n === 11);
+            const srcFile11Lvl = srcFile11 ? srcFile11.lvl : 0;
+            const multmult = 1.9 * [1, 0.96, 0.94, 0.93][srcFile11Lvl];
+
+            let ngPrice = ns.getAugmentationPrice("NeuroFlux Governor");
+            let ngRepReq = ns.getAugmentationRepReq("NeuroFlux Governor");
+            let total = 0;
+            for (let i = 0; i < 10; i++) {
+                total += ngPrice;
+                ngPrice = ngPrice * 1.14 * multmult;
+                ngRepReq *= 1.14;
+            }
+
+            const donateAmt = 1e6 * (ngRepReq / ns.getPlayer().faction_rep_mult);
+            if (donateAmt + total <= ns.getPlayer().money) {
+                ns.exec("reset.js", "home", 1);
             }
         }
+
+        const servers = serverService.getScriptableServers(HOME_RESERVE_RAM);
+        const availableRamBefore = servers.reduce((tally, server) => tally + server.availableRam(), 0);
+
+        doBuyAndSoftenAll(ns);
+
+        if (ns.getPlayer().money * 0.25 > ns.getUpgradeHomeRamCost()) ns.upgradeHomeRam();
+
+        if (ns.getPlayer().money < 1000000000 && doServerBuys) {
+            const bsaPID = ns.exec("buy_server_all.js", "home", 1, "--allow", 0.5, "-qe");
+            while (ns.getRunningScript(bsaPID) !== null) await ns.sleep(100);
+        } else {
+            const bsaPID = ns.exec("buy_server_all.js", "home", 1, "--allow", 0.25, "-qe");
+            while (ns.getRunningScript(bsaPID) !== null) await ns.sleep(100);
+        }
+
+        const availableRamAfter = servers.reduce((tally, server) => tally + server.availableRam(), 0);
+
+        if (availableRamBefore < availableRamAfter || doExp) {
+            doExp = false;
+
+            ns.exec("exp.js", "home", 1, "--reserve", HOME_RESERVE_RAM);
+            await ns.sleep(60 * 1000);
+
+            // kill all weaken scripts
+            const allHostnames = allHosts(ns);
+
+            for (const hostname of allHostnames) {
+                const processes = ns.ps(hostname).filter((a) => a.filename === CONSTWEAKENJS);
+
+                for (const process of processes) {
+                    ns.kill(process.pid);
+                }
+            }
+        }
+
+        await ns.sleep(100);
     }
 }

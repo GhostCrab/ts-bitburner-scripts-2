@@ -25,7 +25,7 @@ export async function main(ns: NS): Promise<void> {
         const hackPID = ns.exec("hack.js", "home", 1, "--limit", 10, "--rounds", 1);
         while (ns.getRunningScript(hackPID) !== null) await ns.sleep(100);
 
-        if (ns.getPlayer().money > 100000000) {
+        if (ns.getPlayer().money) {
             const joinPID = ns.exec("join.js", "home", 1, "-c");
             while (ns.getRunningScript(joinPID) !== null) await ns.sleep(100);
         }
@@ -46,38 +46,31 @@ export async function main(ns: NS): Promise<void> {
         const augTargets = [
             {
                 faction: "Tian Di Hui",
-                aug: "Social Negotiation Assistant (S.N.A)",
-                goal: 1231636000, // 1.23b
+                aug: "Social Negotiation Assistant (S.N.A)"
             },
             {
                 faction: "CyberSec",
-                aug: "Cranial Signal Processors - Gen I",
-                goal: 1068960000, // 1.06b
+                aug: "Cranial Signal Processors - Gen I"
             },
             {
                 faction: "NiteSec",
-                aug: "CRTX42-AA Gene Modification",
-                goal: 77900176255, // 77.9b
+                aug: "CRTX42-AA Gene Modification"
             },
             {
                 faction: "The Black Hand",
-                aug: "The Black Hand",
-                goal: 93390264000, // 99.3b
+                aug: "The Black Hand"
             },
             {
                 faction: "Chongqing",
-                aug: "Neuregen Gene Modification",
-                goal: 1465000000, // 1.46b
+                aug: "Neuregen Gene Modification"
             },
             {
                 faction: "BitRunners",
-                aug: "Embedded Netburner Module Core V2 Upgrade",
-                goal: 19187353631585, // 19.18t + donations
+                aug: "Embedded Netburner Module Core V2 Upgrade"
             },
             {
                 faction: "Daedalus",
-                aug: "The Red Pill",
-                goal: 92750000000, // 92b + donations
+                aug: "The Red Pill"
             },
         ];
 
@@ -85,6 +78,23 @@ export async function main(ns: NS): Promise<void> {
         let allInstalled = true;
         for (const augTarget of augTargets) {
             const targetAug = new Augmentation(ns, augTarget.aug, augTarget.faction);
+            const augs = ns
+                .getAugmentationsFromFaction(augTarget.faction)
+                .map((name) => {
+                    return new Augmentation(ns, name, augTarget.faction);
+                })
+                .filter((a) => a.rep <= targetAug.rep && !a.owned && !a.installed)
+                .sort((a, b) => a.rep - b.rep);
+            let goalCost = 0;
+            let multpow = 0;
+            const srcFile11 = ns.getOwnedSourceFiles().find((x) => x.n === 11);
+            const srcFile11Lvl = srcFile11 ? srcFile11.lvl : 0;
+            const multmult = 1.9 * [1, 0.96, 0.94, 0.93][srcFile11Lvl];
+            for (const aug of augs) {
+                goalCost += aug.price * Math.pow(multmult, multpow);
+                multpow++;
+            }
+
             if (!targetAug.owned) {
                 let overrideDoInstall = false;
                 allInstalled = false;
@@ -144,13 +154,16 @@ export async function main(ns: NS): Promise<void> {
                     // third pass
                     if (favor > ns.getFavorToDonate() && currentRep < targetAug.rep) {
                         const donateAmt = 1e6 * ((targetAug.rep - currentRep) / ns.getPlayer().faction_rep_mult);
-                        if (donateAmt < ns.getPlayer().money * 0.1) {
+                        if (donateAmt < ns.getPlayer().money) {
                             ns.donateToFaction(augTarget.faction, donateAmt);
                             doInstall = true;
+                        } else {
+                            goalCost += donateAmt;
                         }
                     }
 
-                    if (ns.getPlayer().money < augTarget.goal && !overrideDoInstall) {
+                    if (ns.getPlayer().money < goalCost && !overrideDoInstall) {
+                        ns.tprintf("Controller: Target Cash %s", ns.nFormat(goalCost, "$0.000a"),)
                         if (doInstall) doServerBuys = false;
                         doInstall = false;
                     }
@@ -163,15 +176,14 @@ export async function main(ns: NS): Promise<void> {
         if (doInstall) {
             ns.stopAction();
 
-            const mcpPID = ns.exec("mcp.js", "home", 1, "-g");
-            while (ns.getRunningScript(mcpPID) !== null) await ns.sleep(100);
+            const mcpPID = ns.exec("buy_augs.js", "home", 1, "-g");
+            while (ns.getRunningScript(mcpPID) !== null) await ns.sleep(10);
 
             const joinPID = ns.exec("join.js", "home", 1);
-            while (ns.getRunningScript(joinPID) !== null) await ns.sleep(100);
+            while (ns.getRunningScript(joinPID) !== null) await ns.sleep(10);
 
             const cctPID = ns.exec("cct.js", "home", 1);
-            await ns.sleep(1000);
-            ns.kill(cctPID);
+            while (ns.getRunningScript(cctPID) !== null) await ns.sleep(10);
 
             ns.exec("reset.js", "home", 1);
         }

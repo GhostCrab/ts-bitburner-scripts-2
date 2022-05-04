@@ -1,69 +1,135 @@
-import { NS, Server, Player } from "@ns";
+import { NS } from "@ns";
 
-function calculateIntelligenceBonus(intelligence: number, weight = 1): number {
-    return 1 + (weight * Math.pow(intelligence, 0.8)) / 600;
+function getRandomInt(min: number, max: number): number {
+    const lower: number = Math.min(min, max);
+    const upper: number = Math.max(min, max);
+
+    return Math.floor(Math.random() * (upper - lower + 1)) + lower;
 }
 
-export function calculateHackLevelForTime(server: Server, player: Player, ms: number): number {
-    const difficultyMult = server.requiredHackingSkill * server.hackDifficulty;
-    const hackTime = ms / 1000;
-    const baseDiff = 500;
-    const baseSkill = 50;
-    const diffFactor = 2.5;
-    const hackTimeMultiplier = 5;
-  
-    const difficultyFactor = diffFactor * difficultyMult + baseDiff;
-    const speedFactor = player.hacking_speed_mult * calculateIntelligenceBonus(player.intelligence, 1);
-  
-    const hackLvl = (hackTimeMultiplier * difficultyFactor) / (hackTime * speedFactor) - baseSkill;
-  
-    return hackLvl;
-  }
+function gen(): number[][] {
+    const height = getRandomInt(6, 12);
+    const width = getRandomInt(6, 12);
+    const dstY = height - 1;
+    const dstX = width - 1;
+    const minPathLength = dstY + dstX; // Math.abs(dstY - srcY) + Math.abs(dstX - srcX)
+
+    const grid: number[][] = new Array(height);
+    for (let y = 0; y < height; y++) grid[y] = new Array(width).fill(0);
+
+    for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+            if (y == 0 && x == 0) continue; // Don't block start
+            if (y == dstY && x == dstX) continue; // Don't block destination
+
+            // Generate more obstacles the farther a position is from start and destination.
+            // Raw distance factor peaks at 50% at half-way mark. Rescale to 40% max.
+            // Obstacle chance range of [15%, 40%] produces ~78% solvable puzzles
+            const distanceFactor = (Math.min(y + x, dstY - y + dstX - x) / minPathLength) * 0.8;
+            if (Math.random() < Math.max(0.15, distanceFactor)) grid[y][x] = 1;
+        }
+    }
+
+    return grid;
+}
 
 export async function main(ns: NS): Promise<void> {
-    // try {
-    //     //serverService = getServerService(ns);
-    //     serverService = new ServerService(ns);
-    // } catch (e) {
-    //     ns.tprintf("ERROR: %s", e);
-    //     return;
-    // }
-    // const server = serverService.loadServer("zb-def");
-    // //const server = new Server(ns, "zb-def");
+    const grid = gen();
+    const data = grid;
+    const width = data[0].length;
+    const height = data.length;
+    const dstY = height - 1;
+    const dstX = width - 1;
 
-    // ns.tprintf("Hack Time Short: %f", ns.getHackTime("zb-def"));
-    // ns.tprintf("Hack Time Long: %f", ns.getHackTime("zb-def", Number.MIN_VALUE));
+    const paths: ([number, number] | undefined)[][] = new Array(height);
+    for (let y = 0; y < height; y++) {
+        paths[y] = new Array(width);
+    }
 
-    // const hl = server.hackLevelForTime(20*60*1000, ns.getPlayer());
-    // ns.tprintf("Hack Level For Time: %f", server.hackLevelForTime(20*60*1000));
-    // ns.tprintf("Target Hack Time: %f", ns.getHackTime("zb-def", hl))
+    function validPosition(y: number, x: number): boolean {
+        return y >= 0 && y < height && x >= 0 && x < width && data[y][x] == 0;
+    }
 
-    // ns.tprintf("Grow Time Short: %f", ns.getGrowTime("zb-def"));
-    // ns.tprintf("Grow Time Long: %f", ns.getGrowTime("zb-def", Number.MIN_VALUE));
+    // List in-bounds and passable neighbors
+    function* neighbors(y: number, x: number): Generator<[number, number]> {
+        if (validPosition(y - 1, x)) yield [y - 1, x]; // Up
+        if (validPosition(y + 1, x)) yield [y + 1, x]; // Down
+        if (validPosition(y, x - 1)) yield [y, x - 1]; // Left
+        if (validPosition(y, x + 1)) yield [y, x + 1]; // Right
+    }
 
-    // const gl = server.growLevelForTime(20*60*1000, ns.getPlayer());
-    // ns.tprintf("Grow Level For Time: %f", server.growLevelForTime(20*60*1000));
-    // ns.tprintf("Target Grow Time: %f", ns.getGrowTime("zb-def", gl))
+    // Prepare starting point
+    paths[0][0] = [-1, -1];
+    const queue: ([number, number] | undefined)[] = [[0, 0]];
+    while (queue.length > 0) {
+        const cur = queue.shift();
+        if (!cur) break;
 
-    // ns.tprintf("Weaken Time Short: %f", ns.getWeakenTime("zb-def"));
-    // ns.tprintf("Weaken Time Long: %f", ns.getWeakenTime("zb-def", Number.MIN_VALUE));
+        for (const n of neighbors(cur[0], cur[1])) {
+            const y = n[0];
+            const x = n[1];
+            if (!paths[y][x]) {
+                paths[y][x] = cur;
+                queue.push(n);
+            }
+        }
+    }
 
-    // const wl = server.weakenLevelForTime(20*60*1000, ns.getPlayer());
-    // ns.tprintf("Weaken Level For Time: %f", server.weakenLevelForTime(20*60*1000));
-    // ns.tprintf("Target Weaken Time: %f", ns.getWeakenTime("zb-def", wl))
+    if (paths[dstY][dstX]) {
+        ns.tprintf("CAN COMPLETE");
+    } else {
+        ns.tprintf("CANT COMPLETE");
+    }
 
-    ns.tail();
-    const normalHackTime = ns.getHackTime("b-and-a", ns.getPlayer().hacking * 0.5);
+    function translate(cy: number, cx: number, ny: number, nx: number): string {
+        if (ny === -1 && nx === -1) return "X";
 
-    const hackTime = ns.formulas.hacking.hackTime(
-        ns.getServer("b-and-a"),
-        ns.getPlayer(),
-        ns.getPlayer().hacking * 0.5
-    );
-    const hackLevel = ns.formulas.hacking.hackLevelForTime(ns.getServer("b-and-a"), ns.getPlayer(), hackTime);
-    const hackLevel2 = calculateHackLevelForTime(ns.getServer("b-and-a"), ns.getPlayer(), hackTime);
-    ns.tprintf("%f %f %f %f %f", ns.getPlayer().hacking * 0.5, normalHackTime, hackTime, hackLevel2, hackLevel);
+        if (cy === ny) {
+            if (cx > nx) return "L";
+            return "R";
+        }
+        if (cy > ny) {
+            return "U";
+        }
+        return "D";
+    }
 
+    for (let y = 0; y < height; y++) {
+        let xstr = "";
+        for (let x = 0; x < width; x++) {
+            const n = paths[y][x];
+            const nstr = n ? `[${translate(y, x, n[0], n[1])}]` : "[ ]";
+            xstr = ns.sprintf("%s%s", xstr, validPosition(y, x) ? nstr : "[-]");
+        }
+        ns.tprintf(xstr);
+    }
 
-    await ns.hack("b-and-a", {hackOverrideTiming: ns.getPlayer().hacking * 0.5});
+    // reverse the path
+    let path = "";
+    let cur = [dstY, dstX];
+    while (validPosition(cur[0], cur[1])) {
+        const cy = cur[0];
+        const cx = cur[1];
+        const n = paths[cy][cx];
+        if (!n) break;
+        const ny = n[0];
+        const nx = n[1];
+        switch (translate(cy, cx, ny, nx)) {
+            case "L":
+                path = "R" + path;
+                break;
+            case "R":
+                path = "L" + path;
+                break;
+            case "U":
+                path = "D" + path;
+                break;
+            case "D":
+                path = "U" + path;
+                break;
+        }
+        cur = n;
+    }
+
+    ns.tprintf(path);
 }

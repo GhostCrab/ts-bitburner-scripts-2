@@ -13,6 +13,13 @@ function favorToRep(f: number) {
 export async function main(ns: NS): Promise<void> {
     ns.disableLog("disableLog");
     ns.disableLog("sleep");
+    ns.disableLog("brutessh");
+    ns.disableLog("ftpcrack");
+    ns.disableLog("httpworm");
+    ns.disableLog("relaysmtp");
+    ns.disableLog("sqlinject");
+    ns.disableLog("nuke");
+
     //ns.tail();
     const serverService = new ServerService(ns);
 

@@ -1,5 +1,5 @@
 import { NS } from "@ns";
-import { doBackdoor } from "lib/util";
+import { canBackdoor, doBackdoor } from "lib/util";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const findProp = function (propName: string): any {
@@ -45,10 +45,10 @@ type FactionRequirements = {
     murder?: number;
     law?: boolean;
     augmentations?: number;
-    corporation?: string;
+    corp?: string;
     corporationRep?: number;
     businessLeader?: boolean;
-    hacknet?: boolean;
+    hnServer?: boolean;
     daedalus?: boolean; // hacking level OR combat levels
 };
 
@@ -65,33 +65,35 @@ class Faction {
         this.requirements = requirements;
     }
 
-    needInvite(ns: NS): boolean {
+    async getInvite(ns: NS): Promise<boolean> {
         refreshInvitations();
         this.invited = ns.checkFactionInvitations().includes(this.name);
         this.joined = ns.getPlayer().factions.includes(this.name);
 
-        return !this.invited && !this.joined;
-    }
+        if (this.invited || this.joined) return true;
 
-    async getInvite(ns: NS): Promise<boolean> {
-        if (!(await this.checkRequirements(ns))) return false;
-
-        if (!this.needInvite(ns)) return true;
+        if (!this.checkRequirements(ns)) return false;
 
         // location check
         if (this.requirements.locations) {
             if (Array.isArray(this.requirements.locations)) {
                 if (!this.requirements.locations.includes(ns.getPlayer().location)) {
-                    ns.goToLocation(this.requirements.locations[0]);
+                    ns.travelToCity(this.requirements.locations[0]);
                 }
             } else {
                 if (this.requirements.locations !== ns.getPlayer().location) {
-                    ns.goToLocation(this.requirements.locations);
+                    ns.travelToCity(this.requirements.locations);
                 }
             }
         }
 
-        return this.needInvite(ns);
+        // do backdoor
+        if (this.requirements.backdoor) await doBackdoor(ns, this.requirements.backdoor);
+
+        refreshInvitations();
+        this.invited = ns.checkFactionInvitations().includes(this.name);
+
+        return this.invited;
     }
 
     async join(ns: NS): Promise<boolean> {
@@ -103,7 +105,7 @@ class Faction {
         return ns.joinFaction(this.name);
     }
 
-    async checkRequirements(ns: NS, enforceLocation = false): Promise<boolean> {
+    checkRequirements(ns: NS, enforceLocation = false): boolean {
         let passed = true;
 
         // location check
@@ -159,8 +161,8 @@ class Faction {
         }
 
         // corporation check
-        if (this.requirements.corporation && this.requirements.corporationRep) {
-            //
+        if (this.requirements.corp && this.requirements.corporationRep) {
+            passed &&= ns.getCompanyRep(this.requirements.corp) >= this.requirements.corporationRep;
         }
 
         // businessLeader check
@@ -169,16 +171,13 @@ class Faction {
         }
 
         // hacknet check
-        if (this.requirements.hacknet) {
-            //
+        if (this.requirements.hnServer) {
+            passed = false;
         }
 
         // backdoor check
         if (this.requirements.backdoor) {
-            if (this.name !== "Fulcrum Secret Technologies")
-                passed &&= await doBackdoor(ns, this.requirements.backdoor);
-            else
-                passed = false;
+            passed &&= canBackdoor(ns, this.requirements.backdoor);
         }
 
         return passed;
@@ -219,7 +218,7 @@ export async function main(ns: NS): Promise<void> {
         }),
         Netburners: new Faction(ns, "Netburners", {
             hacking: 80,
-            hacknet: true,
+            hnServer: true,
         }),
         "Sector-12": new Faction(ns, "Sector-12", {
             money: 15e6,
@@ -246,43 +245,43 @@ export async function main(ns: NS): Promise<void> {
             locations: "Volhaven",
         }),
         ECorp: new Faction(ns, "ECorp", {
-            corporation: "ECorp",
+            corp: "ECorp",
             corporationRep: 200000,
         }),
         MegaCorp: new Faction(ns, "MegaCorp", {
-            corporation: "MegaCorp",
+            corp: "MegaCorp",
             corporationRep: 200000,
         }),
         "KuaiGong International": new Faction(ns, "KuaiGong International", {
-            corporation: "KuaiGong International",
+            corp: "KuaiGong International",
             corporationRep: 200000,
         }),
         "Four Sigma": new Faction(ns, "Four Sigma", {
-            corporation: "Four Sigma",
+            corp: "Four Sigma",
             corporationRep: 200000,
         }),
         NWO: new Faction(ns, "NWO", {
-            corporation: "NWO",
+            corp: "NWO",
             corporationRep: 200000,
         }),
         "Blade Industries": new Faction(ns, "Blade Industries", {
-            corporation: "Blade Industries",
+            corp: "Blade Industries",
             corporationRep: 200000,
         }),
         "OmniTek Incorporated": new Faction(ns, "OmniTek Incorporated", {
-            corporation: "OmniTek Incorporated",
+            corp: "OmniTek Incorporated",
             corporationRep: 200000,
         }),
         "Bachman & Associates": new Faction(ns, "Bachman & Associates", {
-            corporation: "Bachman & Associates",
+            corp: "Bachman & Associates",
             corporationRep: 200000,
         }),
         "Clarke Incorporated": new Faction(ns, "Clarke Incorporated", {
-            corporation: "Clarke Incorporated",
+            corp: "Clarke Incorporated",
             corporationRep: 200000,
         }),
         "Fulcrum Secret Technologies": new Faction(ns, "Fulcrum Secret Technologies", {
-            corporation: "Fulcrum Secret Technologies",
+            corp: "Fulcrum Technologies",
             corporationRep: 250000,
             backdoor: "fulcrumassets",
         }),

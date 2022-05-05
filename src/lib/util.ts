@@ -125,6 +125,22 @@ export function stdFormat(ns: NS, offset = 0, showms = false): string {
     }
 }
 
+export function canBackdoor(ns: NS, hostname: string): boolean {
+    const server = ns.getServer(hostname);
+
+    if (server.backdoorInstalled) return true;
+
+    if (server.requiredHackingSkill > ns.getHackingLevel()) {
+        return false;
+    }
+
+    if (!server.hasAdminRights && !softenServer(ns, hostname)) {
+        return false;
+    }
+
+    return true;
+}
+
 export async function doBackdoor(ns: NS, hostname: string): Promise<boolean> {
     const hosts = mapHosts(ns);
     const trail = hosts[hostname];

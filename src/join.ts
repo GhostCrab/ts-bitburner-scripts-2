@@ -333,7 +333,7 @@ export async function main(ns: NS): Promise<void> {
             hacking: 2500,
             combat: 1500,
             money: 100e9,
-            augmentations: 30,
+            augmentations: ns.getBitNodeMultipliers().DaedalusAugsRequirement,
             daedalus: true,
         }),
         Illuminati: new Faction(ns, "Illuminati", {

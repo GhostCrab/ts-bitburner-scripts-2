@@ -4,8 +4,7 @@ let lastEl: HTMLElement;
 const roots: HTMLElement[] = [];
 
 function stFormat(ns: NS, ms: number, showms = true, showfull = false) {
-	if (ms <= 0)
-		return "--"
+    if (ms <= 0) return "--";
 
     let timeLeft = ms;
     const hours = Math.floor(ms / (1000 * 60 * 60));
@@ -186,11 +185,23 @@ export async function main(ns: NS): Promise<void> {
         const [hackProgressEl1, hackProgressEl2] = addProgress();
 
         addBottomLine();
-        
+
+        // target faction
+        // target rep (rep/s) || target money
+        // current rep | rep countdown time
+        // rep progress
+        const factionTarget = addSingle();
+        const [factionTargetRep, factionTargetMoney] = addDouble();
+        const [factionRepTotal, factionCountdown] = addDouble();
+        const [factionProgress1, factionProgress2] = addProgress();
+
+        addBottomLine();
+
         karmaEl.classList.toggle("makeStyles-hack-17", false);
         karmaEl.classList.add("makeStyles-hp-15");
 
         const port1 = ns.getPortHandle(1);
+        const factionPort = ns.getPortHandle(2);
         let startTime = 0;
         let endTime = 1000;
         let fullTime = 1000;
@@ -245,6 +256,63 @@ export async function main(ns: NS): Promise<void> {
                 countdownEl.innerText = "";
                 hackProgressEl1.setAttribute("aria-valuenow", "0");
                 hackProgressEl2.setAttribute("style", "transform: translateX(-100%);");
+            }
+
+            if (!factionPort.empty()) {
+                const data = JSON.parse(factionPort.peek().toString());
+
+                // Update Faction Name
+                const factionName = data[0];
+                factionTarget.innerText = factionName;
+
+                // Update Faction Rep Target
+                // target rep (rep/s)
+                const repTarget = Number(data[1]);
+                const repGainPerMs = (ns.getPlayer().workRepGainRate * 5) / 1000;
+                factionTargetRep.innerText = ns.sprintf(
+                    "%s (%s/s)    ",
+                    ns.nFormat(repTarget, "0.00a"),
+                    ns.nFormat(repGainPerMs * 1000, "0.00a"),
+                );
+
+                // update Money Target
+                factionTargetMoney.innerText = ns.nFormat(data[2], "$0.00a");
+
+                // Update Current Faction Rep
+                const currentRep =
+                    ns.getFactionRep(factionName) +
+                    (ns.getPlayer().currentWorkFactionName === factionName ? ns.getPlayer().workRepGained : 0);
+
+                factionRepTotal.innerText = ns.nFormat(currentRep, "0.00a");
+
+                // Update Rep Countdown Timer
+                if (repGainPerMs > 0)
+                    factionCountdown.innerText = stFormat(ns, (repTarget - currentRep) / repGainPerMs, false);
+                else 
+                    factionCountdown.innerText = "--";
+
+                // Update Progress
+                const tvalue = currentRep;
+                const nvalue = (tvalue / repTarget) * 100;
+                let transform = 100 - nvalue;
+                let wholeValue = Math.floor(nvalue);
+
+                if (wholeValue > 100) {
+                    factionPort.clear();
+                    transform = 0;
+                    wholeValue = 100;
+                }
+
+                factionProgress1.setAttribute("aria-valuenow", `${wholeValue}`);
+                factionProgress2.setAttribute("style", `transform: translateX(${-transform.toFixed(3)}%);`);
+            } else {
+                factionTarget.innerText = "";
+                factionTargetRep.innerText = "";
+                factionTargetMoney.innerText = "";
+                factionRepTotal.innerText = "";
+                factionCountdown.innerText = ""
+                factionProgress1.setAttribute("aria-valuenow", "100");
+                factionProgress2.setAttribute("style", "transform: translateX(-0%);");
             }
 
             await ns.sleep(1000);

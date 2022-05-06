@@ -1,6 +1,6 @@
 import { NS } from "@ns";
 import { Augmentation } from "/lib/augmentation/augmentation";
-import { allHosts, CONSTWEAKENJS, doBuyAndSoftenAll, stFormat } from "/lib/util";
+import { allHosts, CONSTWEAKENJS, doBuyAndSoftenAll } from "/lib/util";
 import { ServerService } from "/services/server";
 
 const HOME_RESERVE_RAM = 128;
@@ -50,45 +50,113 @@ export async function main(ns: NS): Promise<void> {
         // 10) Daedalus Bribe
         // 11) World Daemon
 
-        const augTargets = [
+        type AugTarget = {
+            faction: string;
+            aug: string;
+            allbuy?: boolean;
+        };
+
+        const augTargets: AugTarget[] = [
             {
                 faction: "Tian Di Hui",
-                aug: "Social Negotiation Assistant (S.N.A)"
+                aug: "Social Negotiation Assistant (S.N.A)",
             },
             {
                 faction: "CyberSec",
-                aug: "Cranial Signal Processors - Gen I"
+                aug: "Cranial Signal Processors - Gen I",
             },
             {
                 faction: "NiteSec",
-                aug: "CRTX42-AA Gene Modification"
+                aug: "CRTX42-AA Gene Modification",
             },
             {
                 faction: "The Black Hand",
-                aug: "The Black Hand"
+                aug: "The Black Hand",
             },
             {
                 faction: "Chongqing",
-                aug: "Neuregen Gene Modification"
+                aug: "Neuregen Gene Modification",
+                allbuy: true,
             },
             {
                 faction: "BitRunners",
-                aug: "Embedded Netburner Module Core V2 Upgrade"
+                aug: "Embedded Netburner Module Core V2 Upgrade",
             },
             {
                 faction: "Daedalus",
-                aug: "The Red Pill"
+                aug: "The Red Pill",
+            },
+        ];
+
+        const backupTargets: AugTarget[] = [
+            {
+                faction: "Sector-12", // +3 augs
+                aug: "CashRoot Starter Kit", // 12.5k
+                allbuy: true,
+            },
+            {
+                faction: "Ishima", // +2 augs
+                aug: "INFRARET Enhancement", // 7.5k
+                allbuy: true,
+            },
+            {
+                faction: "Volhaven", // +2 augs
+                aug: "Combat Rib II", // 18.75k
+                allbuy: true,
+            },
+            {
+                faction: "New Tokyo", // +1 aug
+                aug: "NutriGen Implant", // 6.25k
+                allbuy: true,
+            },
+            {
+                faction: "New Tokyo", // +1 aug
+                aug: "NutriGen Implant", // 6.25k
+                allbuy: true,
+            },
+            {
+                faction: "Tian Di Hui", // +2 augs
+                aug: "Neuroreceptor Management Implant", // 75k
+                allbuy: true,
+            },
+            {
+                faction: "Aevum", // +1 aug
+                aug: "PCMatrix", // 100k
+                allbuy: true,
             },
         ];
 
         let doInstall = false;
         let allInstalled = true;
+        let installNonHackAugs = false;
         for (const augTarget of augTargets) {
-            const targetAug = new Augmentation(ns, augTarget.aug, augTarget.faction);
+            let targetAug = new Augmentation(ns, augTarget.aug, augTarget.faction);
+            if (targetAug.owned) continue;
+
+            let targetFaction = augTarget.faction;
+            installNonHackAugs = augTarget.allbuy;
+
+            // override target aug if we're targeting Daedalus but we dont have enough augments banked
+            if (
+                augTarget.faction === "Daedalus" &&
+                ns.getOwnedAugmentations().length < ns.getBitNodeMultipliers().DaedalusAugsRequirement
+            ) {
+                for (const altAugTarget of backupTargets) {
+                    const altTargetAug = new Augmentation(ns, altAugTarget.aug, altAugTarget.faction);
+                    if (altTargetAug.owned) continue;
+
+                    targetAug = altAugTarget;
+                    targetFaction = altAugTarget.faction;
+                    installNonHackAugs = altAugTarget.allbuy;
+                }
+            }
+
+            let targetRepDisp = targetAug.rep;
+
             const augs = ns
-                .getAugmentationsFromFaction(augTarget.faction)
+                .getAugmentationsFromFaction(targetFaction)
                 .map((name) => {
-                    return new Augmentation(ns, name, augTarget.faction);
+                    return new Augmentation(ns, name, targetFaction);
                 })
                 .filter((a) => a.rep <= targetAug.rep && !a.owned && !a.installed)
                 .sort((a, b) => a.rep - b.rep);
@@ -102,88 +170,91 @@ export async function main(ns: NS): Promise<void> {
                 multpow++;
             }
 
-            if (!targetAug.owned) {
-                let overrideDoInstall = false;
-                allInstalled = false;
-                if (ns.checkFactionInvitations().includes(augTarget.faction)) ns.joinFaction(augTarget.faction);
-                ns.workForFaction(augTarget.faction, "Hacking Contracts", true);
+            let overrideDoInstall = false;
+            allInstalled = false;
+            if (ns.checkFactionInvitations().includes(targetFaction)) ns.joinFaction(targetFaction);
+            ns.workForFaction(targetFaction, "Hacking Contracts", true);
 
-                if (targetAug.purchaseable) doInstall = true;
+            if (targetAug.purchaseable) doInstall = true;
 
-                if (targetAug.rep > favorToRep(ns.getFavorToDonate())) {
-                    const favor = ns.getFactionFavor(augTarget.faction);
-                    const targetRep = favorToRep(ns.getFavorToDonate());
-                    const currentRep =
-                        ns.getFactionRep(augTarget.faction) +
-                        (ns.getPlayer().currentWorkFactionName === augTarget.faction
-                            ? ns.getPlayer().workRepGained
-                            : 0);
-                    const storedRep = Math.max(0, favorToRep(favor));
-                    const targetRep15Percent = targetRep * 0.15;
-                    const totalRep = currentRep + storedRep;
+            if (targetAug.rep > favorToRep(ns.getFavorToDonate())) {
+                const favor = ns.getFactionFavor(targetFaction);
+                const targetRep = favorToRep(ns.getFavorToDonate());
+                const currentRep =
+                    ns.getFactionRep(targetFaction) +
+                    (ns.getPlayer().currentWorkFactionName === targetFaction ? ns.getPlayer().workRepGained : 0);
+                const storedRep = Math.max(0, favorToRep(favor));
+                const targetRep15Percent = targetRep * 0.15;
+                const totalRep = currentRep + storedRep;
 
-                    // first pass
-                    if (totalRep < targetRep15Percent && favor < 25) {
-                        const repGainPerMS = (ns.getPlayer().workRepGainRate * 5) / 1000;
-                        const msToRep = (targetRep15Percent - totalRep) / repGainPerMS;
+                // first pass
+                if (totalRep < targetRep15Percent && favor < 25) {
+                    targetRepDisp = targetRep15Percent;
+                    // const repGainPerMS = (ns.getPlayer().workRepGainRate * 5) / 1000;
+                    // const msToRep = (targetRep15Percent - totalRep) / repGainPerMS;
 
-                        ns.tprintf(
-                            "Time For %s %d => %d: %s",
-                            augTarget.faction,
-                            totalRep,
-                            targetRep15Percent,
-                            stFormat(ns, msToRep)
-                        );
-                    }
-                    if (totalRep >= targetRep15Percent && favor < 25) {
-                        overrideDoInstall = true;
+                    // ns.tprintf(
+                    //     "Time For %s %d => %d: %s",
+                    //     targetFaction,
+                    //     totalRep,
+                    //     targetRep15Percent,
+                    //     stFormat(ns, msToRep)
+                    // );
+                }
+                if (totalRep >= targetRep15Percent && favor < 25) {
+                    overrideDoInstall = true;
+                    doInstall = true;
+                }
+
+                // second pass
+                if (totalRep > targetRep15Percent && totalRep < targetRep && favor < ns.getFavorToDonate()) {
+                    targetRepDisp = targetRep;
+                    // const repGainPerMS = (ns.getPlayer().workRepGainRate * 5) / 1000;
+                    // const msToRep = (targetRep - totalRep) / repGainPerMS;
+
+                    // ns.tprintf("Time For %s %d => %d: %s", targetFaction, totalRep, targetRep, stFormat(ns, msToRep));
+                }
+                if (totalRep > targetRep15Percent && totalRep > targetRep && favor < ns.getFavorToDonate()) {
+                    overrideDoInstall = true;
+                    doInstall = true;
+                }
+
+                // third pass
+                if (favor > ns.getFavorToDonate() && currentRep < targetAug.rep) {
+                    const donateAmt = 1e6 * ((targetAug.rep - currentRep) / ns.getPlayer().faction_rep_mult);
+                    if (donateAmt < ns.getPlayer().money) {
+                        ns.donateToFaction(targetFaction, donateAmt);
                         doInstall = true;
-                    }
-
-                    // second pass
-                    if (totalRep < targetRep && favor < ns.getFavorToDonate()) {
-                        const repGainPerMS = (ns.getPlayer().workRepGainRate * 5) / 1000;
-                        const msToRep = (targetRep - totalRep) / repGainPerMS;
-
-                        ns.tprintf(
-                            "Time For %s %d => %d: %s",
-                            augTarget.faction,
-                            totalRep,
-                            targetRep,
-                            stFormat(ns, msToRep)
-                        );
-                    }
-                    if (totalRep > targetRep && favor < ns.getFavorToDonate()) {
-                        overrideDoInstall = true;
-                        doInstall = true;
-                    }
-
-                    // third pass
-                    if (favor > ns.getFavorToDonate() && currentRep < targetAug.rep) {
-                        const donateAmt = 1e6 * ((targetAug.rep - currentRep) / ns.getPlayer().faction_rep_mult);
-                        if (donateAmt < ns.getPlayer().money) {
-                            ns.donateToFaction(augTarget.faction, donateAmt);
-                            doInstall = true;
-                        } else {
-                            goalCost += donateAmt;
-                        }
-                    }
-
-                    if (ns.getPlayer().money < goalCost && !overrideDoInstall) {
-                        ns.tprintf("Controller: Target Cash %s", ns.nFormat(goalCost, "$0.000a"),)
-                        if (doInstall) doServerBuys = false;
-                        doInstall = false;
+                    } else {
+                        goalCost += donateAmt;
                     }
                 }
 
-                break;
+                if (ns.getPlayer().money < goalCost && !overrideDoInstall) {
+                    ns.tprintf("Controller: Target Cash %s", ns.nFormat(goalCost, "$0.000a"));
+                    if (doInstall) doServerBuys = false;
+                    doInstall = false;
+                }
             }
+
+            const port = ns.getPortHandle(2);
+            port.clear();
+            port.write(
+                JSON.stringify([
+                    targetFaction,
+                    targetRepDisp,
+                    goalCost,
+                ])
+            );
+
+            break;
         }
 
         if (doInstall) {
             ns.stopAction();
 
-            const mcpPID = ns.exec("buy_augs.js", "home", 1, "-g");
+            const baFlags = installNonHackAugs ? "-gn" : "-g";
+            const mcpPID = ns.exec("buy_augs.js", "home", 1, baFlags);
             while (ns.getRunningScript(mcpPID) !== null) await ns.sleep(10);
 
             const joinPID = ns.exec("join.js", "home", 1);

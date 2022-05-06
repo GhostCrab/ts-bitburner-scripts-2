@@ -16,4 +16,7 @@ export async function main(ns: NS): Promise<void> {
     while (ns.getRunningScript(mcpPID) !== null) await ns.sleep(10);
 
     ns.installAugmentations("controller.js");
+
+    // in case install fails because we dont have any augs to install
+    ns.softReset("controller.js");
 }

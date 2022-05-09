@@ -19,20 +19,20 @@ export class Augmentation {
     str: string;
 
     constructor(ns: NS, name: string, faction: string) {
-        const ownedAugs = ns.getOwnedAugmentations(true);
-        const installedAugs = ns.getOwnedAugmentations();
+        const ownedAugs = ns.singularity.getOwnedAugmentations(true);
+        const installedAugs = ns.singularity.getOwnedAugmentations();
         const factionRep =
             (ns.getPlayer().currentWorkFactionName === faction ? ns.getPlayer().workRepGained : 0) +
-            ns.getFactionRep(faction);
+            ns.singularity.getFactionRep(faction);
         this.name = name;
         this.faction = faction;
-        this.price = ns.getAugmentationPrice(this.name);
-        this.rep = ns.getAugmentationRepReq(this.name);
-        this.stats = ns.getAugmentationStats(this.name);
+        this.price = ns.singularity.getAugmentationPrice(this.name);
+        this.rep = ns.singularity.getAugmentationRepReq(this.name);
+        this.stats = ns.singularity.getAugmentationStats(this.name);
         this.owned = ownedAugs.includes(this.name);
         this.installed = installedAugs.includes(this.name);
         this.purchaseable = factionRep >= this.rep;
-        let dep = ns.getAugmentationPrereq(this.name)[0];
+        let dep = ns.singularity.getAugmentationPrereq(this.name)[0];
         if (dep === undefined || ownedAugs.includes(dep) || installedAugs.includes(dep)) dep = "";
         this.dep = dep;
         let installedStr = this.installed

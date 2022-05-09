@@ -60,14 +60,14 @@ class Faction {
 
     constructor(ns: NS, name: string, requirements: FactionRequirements) {
         this.name = name;
-        this.invited = ns.checkFactionInvitations().includes(this.name);
+        this.invited = ns.singularity.checkFactionInvitations().includes(this.name);
         this.joined = ns.getPlayer().factions.includes(this.name);
         this.requirements = requirements;
     }
 
     async getInvite(ns: NS): Promise<boolean> {
         refreshInvitations();
-        this.invited = ns.checkFactionInvitations().includes(this.name);
+        this.invited = ns.singularity.checkFactionInvitations().includes(this.name);
         this.joined = ns.getPlayer().factions.includes(this.name);
 
         if (this.invited || this.joined) return true;
@@ -78,11 +78,11 @@ class Faction {
         if (this.requirements.locations) {
             if (Array.isArray(this.requirements.locations)) {
                 if (!this.requirements.locations.includes(ns.getPlayer().location)) {
-                    ns.travelToCity(this.requirements.locations[0]);
+                    ns.singularity.travelToCity(this.requirements.locations[0]);
                 }
             } else {
                 if (this.requirements.locations !== ns.getPlayer().location) {
-                    ns.travelToCity(this.requirements.locations);
+                    ns.singularity.travelToCity(this.requirements.locations);
                 }
             }
         }
@@ -91,7 +91,7 @@ class Faction {
         if (this.requirements.backdoor) await doBackdoor(ns, this.requirements.backdoor);
 
         refreshInvitations();
-        this.invited = ns.checkFactionInvitations().includes(this.name);
+        this.invited = ns.singularity.checkFactionInvitations().includes(this.name);
 
         return this.invited;
     }
@@ -102,7 +102,7 @@ class Faction {
 
         if (!(await this.getInvite(ns))) return false;
 
-        return ns.joinFaction(this.name);
+        return ns.singularity.joinFaction(this.name);
     }
 
     checkRequirements(ns: NS, enforceLocation = false): boolean {
@@ -157,12 +157,12 @@ class Faction {
 
         // augmentations check
         if (this.requirements.augmentations) {
-            passed &&= ns.getOwnedAugmentations().length >= this.requirements.augmentations;
+            passed &&= ns.singularity.getOwnedAugmentations().length >= this.requirements.augmentations;
         }
 
         // corporation check
         if (this.requirements.corp && this.requirements.corporationRep) {
-            passed &&= ns.getCompanyRep(this.requirements.corp) >= this.requirements.corporationRep;
+            passed &&= ns.singularity.getCompanyRep(this.requirements.corp) >= this.requirements.corporationRep;
         }
 
         // businessLeader check
@@ -368,20 +368,20 @@ export async function main(ns: NS): Promise<void> {
     if (options.c) return;
 
     if (
-        ns.checkFactionInvitations().includes("Chongqing") &&
-        !ns.getOwnedAugmentations(true).includes("Neuregen Gene Modification")
+        ns.singularity.checkFactionInvitations().includes("Chongqing") &&
+        !ns.singularity.getOwnedAugmentations(true).includes("Neuregen Gene Modification")
     ) {
         await factions["Chongqing"].join(ns);
     }
 
     if (
-        ns.checkFactionInvitations().includes("Sector-12") &&
-        !ns.getOwnedAugmentations(true).includes("CashRoot Starter Kit")
+        ns.singularity.checkFactionInvitations().includes("Sector-12") &&
+        !ns.singularity.getOwnedAugmentations(true).includes("CashRoot Starter Kit")
     ) {
         await factions["Sector-12"].join(ns);
     }
 
-    if (ns.checkFactionInvitations().includes("Aevum") && !ns.getOwnedAugmentations(true).includes("PCMatrix")) {
+    if (ns.singularity.checkFactionInvitations().includes("Aevum") && !ns.singularity.getOwnedAugmentations(true).includes("PCMatrix")) {
         await factions["Aevum"].join(ns);
     }
 

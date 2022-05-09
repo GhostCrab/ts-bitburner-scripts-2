@@ -19,5 +19,15 @@ let playerProp: any;
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 export async function main(ns: NS): Promise<void> {
     playerProp = findProp("player");
-    console.log(playerProp);
+    playerProp.giveExploit("Bypass");
+    playerProp.giveExploit("PrototypeTampering");
+    playerProp.giveExploit("Unclickable");
+    playerProp.giveExploit("UndocumentedFunctionCall");
+    playerProp.giveExploit("TimeCompression");
+    playerProp.giveExploit("RealityAlteration");
+    playerProp.giveExploit("N00dles");
+    playerProp.giveExploit("YoureNotMeantToAccessThis");
+    playerProp.giveExploit("TrueRecursion");
+    playerProp.giveExploit("INeedARainbow");
+    playerProp.giveExploit("EditSaveFile");
 }

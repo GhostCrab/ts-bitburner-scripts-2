@@ -73,17 +73,17 @@ export function allHosts(ns: NS): string[] {
 export function doProgramBuys(ns: NS): void {
     const player = ns.getPlayer();
 
-    if (!player.tor && player.money > 200e3) ns.purchaseTor();
+    if (!player.tor && player.money > 200e3) ns.singularity.purchaseTor();
 
-    if (!ns.fileExists("BruteSSH.exe", "home") && player.money > 500e3) ns.purchaseProgram("BruteSSH.exe");
+    if (!ns.fileExists("BruteSSH.exe", "home") && player.money > 500e3) ns.singularity.purchaseProgram("BruteSSH.exe");
 
-    if (!ns.fileExists("FTPCrack.exe", "home") && player.money > 1500e3) ns.purchaseProgram("FTPCrack.exe");
+    if (!ns.fileExists("FTPCrack.exe", "home") && player.money > 1500e3) ns.singularity.purchaseProgram("FTPCrack.exe");
 
-    if (!ns.fileExists("relaySMTP.exe", "home") && player.money > 5e6) ns.purchaseProgram("relaySMTP.exe");
+    if (!ns.fileExists("relaySMTP.exe", "home") && player.money > 5e6) ns.singularity.purchaseProgram("relaySMTP.exe");
 
-    if (!ns.fileExists("HTTPWorm.exe", "home") && player.money > 30e6) ns.purchaseProgram("HTTPWorm.exe");
+    if (!ns.fileExists("HTTPWorm.exe", "home") && player.money > 30e6) ns.singularity.purchaseProgram("HTTPWorm.exe");
 
-    if (!ns.fileExists("SQLInject.exe", "home") && player.money > 250e6) ns.purchaseProgram("SQLInject.exe");
+    if (!ns.fileExists("SQLInject.exe", "home") && player.money > 250e6) ns.singularity.purchaseProgram("SQLInject.exe");
 }
 
 export function doBuyAndSoftenAll(ns: NS): void {
@@ -172,11 +172,11 @@ export async function doBackdoor(ns: NS, hostname: string): Promise<boolean> {
     }
 
     for (const hostHopName of trail) {
-        ns.connect(hostHopName);
+        ns.singularity.connect(hostHopName);
     }
 
-    await ns.installBackdoor();
-    ns.connect("home");
+    await ns.singularity.installBackdoor();
+    ns.singularity.connect("home");
 
     return true;
 }

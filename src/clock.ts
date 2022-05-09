@@ -1,4 +1,5 @@
 import { NS } from "@ns";
+import { stdFormat } from "/lib/util";
 
 let lastEl: HTMLElement;
 const roots: HTMLElement[] = [];
@@ -190,8 +191,8 @@ export async function main(ns: NS): Promise<void> {
         // target rep (rep/s) || target money
         // current rep | rep countdown time
         // rep progress
-        const factionTarget = addSingle();
-        const [factionTargetRep, factionTargetMoney] = addDouble();
+        const [factionTarget, factionTargetMoney] = addDouble();
+        const [factionTargetRep, factionTargetEndTime] = addDouble();
         const [factionRepTotal, factionCountdown] = addDouble();
         const [factionProgress1, factionProgress2] = addProgress();
 
@@ -272,7 +273,7 @@ export async function main(ns: NS): Promise<void> {
                 factionTargetRep.innerText = ns.sprintf(
                     "%s (%s/s)    ",
                     ns.nFormat(repTarget, "0.00a"),
-                    ns.nFormat(repGainPerMs * 1000, "0.00a"),
+                    ns.nFormat(repGainPerMs * 1000, "0.00a")
                 );
 
                 // update Money Target
@@ -280,16 +281,22 @@ export async function main(ns: NS): Promise<void> {
 
                 // Update Current Faction Rep
                 const currentRep =
-                    ns.getFactionRep(factionName) +
+                    ns.singularity.getFactionRep(factionName) +
                     (ns.getPlayer().currentWorkFactionName === factionName ? ns.getPlayer().workRepGained : 0);
 
                 factionRepTotal.innerText = ns.nFormat(currentRep, "0.00a");
 
                 // Update Rep Countdown Timer
-                if (repGainPerMs > 0)
+                if (repGainPerMs > 0) {
+                    factionTargetEndTime.innerText = stdFormat(ns, (repTarget - currentRep) / repGainPerMs);
                     factionCountdown.innerText = stFormat(ns, (repTarget - currentRep) / repGainPerMs, false);
-                else 
+                }
+                else {
+                    factionTargetEndTime.innerText = "--";
                     factionCountdown.innerText = "--";
+                }
+
+
 
                 // Update Progress
                 const tvalue = currentRep;
@@ -310,7 +317,8 @@ export async function main(ns: NS): Promise<void> {
                 factionTargetRep.innerText = "";
                 factionTargetMoney.innerText = "";
                 factionRepTotal.innerText = "";
-                factionCountdown.innerText = ""
+                factionCountdown.innerText = "";
+                factionTargetEndTime.innerText = "";
                 factionProgress1.setAttribute("aria-valuenow", "100");
                 factionProgress2.setAttribute("style", "transform: translateX(-0%);");
             }

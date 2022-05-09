@@ -33,11 +33,11 @@ export async function main(ns: NS): Promise<void> {
 
     while (true) {
         if (dynamic) {
-            if (ns.getCrimeChance("mug") > 0.7) crime = "mug";
-            if (ns.getCrimeChance("homicide") > 0.7) crime = "homicide";
+            if (ns.singularity.getCrimeChance("mug") > 0.7) crime = "mug";
+            if (ns.singularity.getCrimeChance("homicide") > 0.7) crime = "homicide";
         }
-        await ns.sleep(ns.commitCrime(crime) + 200);
+        await ns.sleep(ns.singularity.commitCrime(crime) + 200);
     }
 
-    ns.workForFaction("NiteSec", "Field Work");
+    ns.singularity.workForFaction("NiteSec", "Field Work");
 }

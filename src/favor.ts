@@ -12,10 +12,10 @@ export async function main(ns: NS): Promise<void> {
     }
 
     for (const faction of ns.getPlayer().factions) {
-        const favor = ns.getFactionFavor(faction);
+        const favor = ns.singularity.getFactionFavor(faction);
         const targetRep = favorToRep(ns.getFavorToDonate());
         const currentRep =
-            ns.getFactionRep(faction) +
+            ns.singularity.getFactionRep(faction) +
             (ns.getPlayer().currentWorkFactionName === faction ? ns.getPlayer().workRepGained : 0);
         const storedRep = Math.max(0, favorToRep(favor));
         const totalRep = currentRep + storedRep;

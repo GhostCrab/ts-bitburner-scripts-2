@@ -1,10 +1,10 @@
 import { NS } from "@ns";
 
 export async function main(ns: NS): Promise<void> {
-    ns.stopAction();
+    ns.singularity.stopAction();
 
-    while (ns.upgradeHomeRam()) await ns.sleep(10);
-    while (ns.upgradeHomeCores()) await ns.sleep(10);
+    while (ns.singularity.upgradeHomeRam()) await ns.sleep(10);
+    while (ns.singularity.upgradeHomeCores()) await ns.sleep(10);
 
     const joinPID = ns.exec("join.js", "home");
     while (ns.getRunningScript(joinPID) !== null) await ns.sleep(10);
@@ -15,8 +15,8 @@ export async function main(ns: NS): Promise<void> {
     const mcpPID = ns.exec("buy_augs.js", "home", 1, "-ng");
     while (ns.getRunningScript(mcpPID) !== null) await ns.sleep(10);
 
-    ns.installAugmentations("controller.js");
+    ns.singularity.installAugmentations("controller.js");
 
     // in case install fails because we dont have any augs to install
-    ns.softReset("controller.js");
+    ns.singularity.softReset("controller.js");
 }

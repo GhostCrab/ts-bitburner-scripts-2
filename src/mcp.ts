@@ -119,7 +119,7 @@ export async function main(ns: NS): Promise<void> {
         for (const augTarget of augTargets) {
             const targetAug = new Augmentation(ns, augTarget.aug, augTarget.faction);
             const augs = ns
-                .getAugmentationsFromFaction(augTarget.faction)
+                .singularity.getAugmentationsFromFaction(augTarget.faction)
                 .map((name) => {
                     return new Augmentation(ns, name, augTarget.faction);
                 })
@@ -138,16 +138,16 @@ export async function main(ns: NS): Promise<void> {
             if (!targetAug.owned) {
                 let overrideDoInstall = false;
                 allInstalled = false;
-                if (ns.checkFactionInvitations().includes(augTarget.faction)) ns.joinFaction(augTarget.faction);
-                ns.workForFaction(augTarget.faction, "Hacking Contracts", true);
+                if (ns.singularity.checkFactionInvitations().includes(augTarget.faction)) ns.singularity.joinFaction(augTarget.faction);
+                ns.singularity.workForFaction(augTarget.faction, "Hacking Contracts", true);
 
                 if (targetAug.purchaseable) doInstall = true;
 
                 if (targetAug.rep > favorToRep(ns.getFavorToDonate())) {
-                    const favor = ns.getFactionFavor(augTarget.faction);
+                    const favor = ns.singularity.getFactionFavor(augTarget.faction);
                     const targetRep = favorToRep(ns.getFavorToDonate());
                     const currentRep =
-                        ns.getFactionRep(augTarget.faction) +
+                        ns.singularity.getFactionRep(augTarget.faction) +
                         (ns.getPlayer().currentWorkFactionName === augTarget.faction
                             ? ns.getPlayer().workRepGained
                             : 0);
@@ -195,7 +195,7 @@ export async function main(ns: NS): Promise<void> {
                     if (favor > ns.getFavorToDonate() && currentRep < targetAug.rep) {
                         const donateAmt = 1e6 * ((targetAug.rep - currentRep) / ns.getPlayer().faction_rep_mult);
                         if (donateAmt < ns.getPlayer().money) {
-                            ns.donateToFaction(augTarget.faction, donateAmt);
+                            ns.singularity.donateToFaction(augTarget.faction, donateAmt);
                             doInstall = true;
                         } else {
                             goalCost += donateAmt;
@@ -214,7 +214,7 @@ export async function main(ns: NS): Promise<void> {
         }
 
         if (doInstall) {
-            ns.stopAction();
+            ns.singularity.stopAction();
 
             const mcpPID = ns.exec("buy_augs.js", "home", 1, "-g");
             while (ns.getRunningScript(mcpPID) !== null) await ns.sleep(10);
@@ -238,8 +238,8 @@ export async function main(ns: NS): Promise<void> {
             const srcFile11Lvl = srcFile11 ? srcFile11.lvl : 0;
             const multmult = 1.9 * [1, 0.96, 0.94, 0.93][srcFile11Lvl];
 
-            let ngPrice = ns.getAugmentationPrice("NeuroFlux Governor");
-            let ngRepReq = ns.getAugmentationRepReq("NeuroFlux Governor");
+            let ngPrice = ns.singularity.getAugmentationPrice("NeuroFlux Governor");
+            let ngRepReq = ns.singularity.getAugmentationRepReq("NeuroFlux Governor");
             let total = 0;
             for (let i = 0; i < 10; i++) {
                 total += ngPrice;
@@ -258,7 +258,7 @@ export async function main(ns: NS): Promise<void> {
 
         doBuyAndSoftenAll(ns);
 
-        if (ns.getPlayer().money * 0.25 > ns.getUpgradeHomeRamCost()) ns.upgradeHomeRam();
+        if (ns.getPlayer().money * 0.25 > ns.singularity.getUpgradeHomeRamCost()) ns.singularity.upgradeHomeRam();
 
         if (ns.getPlayer().money < 1000000000 && doServerBuys) {
             const bsaPID = ns.exec("buy_server_all.js", "home", 1, "--allow", 0.5, "-qe");

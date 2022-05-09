@@ -32,10 +32,16 @@ export async function main(ns: NS): Promise<void> {
         const hackPID = ns.exec("hack.js", "home", 1, "--limit", 10, "--rounds", 1);
         while (ns.getRunningScript(hackPID) !== null) await ns.sleep(100);
 
-        if (ns.getPlayer().money) {
-            const joinPID = ns.exec("join.js", "home", 1, "-c");
-            while (ns.getRunningScript(joinPID) !== null) await ns.sleep(100);
+        if (ns.getPlayer().factions.length > 0) {
+            const cctPID = ns.exec("cct.js", "home", 1);
+            while (ns.getRunningScript(cctPID) !== null) await ns.sleep(10);
         }
+
+        // if we have the red pill and we can hack the world daemon, ascend
+        if (ns.getHackingLevel() >= ns.getServerRequiredHackingLevel("w0r1d_d43m0n")) ns.exec("ascend.js", "home");
+
+        const joinPID = ns.exec("join.js", "home", 1, "-c");
+        while (ns.getRunningScript(joinPID) !== null) await ns.sleep(100);
 
         // check to see what faction should be targeted
         // 1) tian di hui 6.25k - Social Negotiation Assistant (S.N.A)
@@ -110,11 +116,6 @@ export async function main(ns: NS): Promise<void> {
                 allbuy: true,
             },
             {
-                faction: "New Tokyo", // +1 aug
-                aug: "NutriGen Implant", // 6.25k
-                allbuy: true,
-            },
-            {
                 faction: "Tian Di Hui", // +2 augs
                 aug: "Neuroreceptor Management Implant", // 75k
                 allbuy: true,
@@ -134,27 +135,32 @@ export async function main(ns: NS): Promise<void> {
             if (targetAug.owned) continue;
 
             let targetFaction = augTarget.faction;
-            installNonHackAugs = augTarget.allbuy;
+            installNonHackAugs = !!augTarget.allbuy;
 
             // override target aug if we're targeting Daedalus but we dont have enough augments banked
             if (
                 augTarget.faction === "Daedalus" &&
-                ns.getOwnedAugmentations().length < ns.getBitNodeMultipliers().DaedalusAugsRequirement
+                ns.singularity.getOwnedAugmentations().length < ns.getBitNodeMultipliers().DaedalusAugsRequirement
             ) {
+                ns.tprintf("Overriding Daedalus");
                 for (const altAugTarget of backupTargets) {
                     const altTargetAug = new Augmentation(ns, altAugTarget.aug, altAugTarget.faction);
                     if (altTargetAug.owned) continue;
 
-                    targetAug = altAugTarget;
+                    targetAug = new Augmentation(ns, altAugTarget.aug, altAugTarget.faction);
                     targetFaction = altAugTarget.faction;
-                    installNonHackAugs = altAugTarget.allbuy;
+                    installNonHackAugs = !!altAugTarget.allbuy;
+
+                    ns.tprintf("Overriding Daedalus => %s", targetFaction);
+
+                    break;
                 }
             }
 
             let targetRepDisp = targetAug.rep;
 
             const augs = ns
-                .getAugmentationsFromFaction(targetFaction)
+                .singularity.getAugmentationsFromFaction(targetFaction)
                 .map((name) => {
                     return new Augmentation(ns, name, targetFaction);
                 })
@@ -172,16 +178,16 @@ export async function main(ns: NS): Promise<void> {
 
             let overrideDoInstall = false;
             allInstalled = false;
-            if (ns.checkFactionInvitations().includes(targetFaction)) ns.joinFaction(targetFaction);
-            ns.workForFaction(targetFaction, "Hacking Contracts", true);
+            if (ns.singularity.checkFactionInvitations().includes(targetFaction)) ns.singularity.joinFaction(targetFaction);
+            ns.singularity.workForFaction(targetFaction, "Hacking Contracts", true);
 
             if (targetAug.purchaseable) doInstall = true;
 
             if (targetAug.rep > favorToRep(ns.getFavorToDonate())) {
-                const favor = ns.getFactionFavor(targetFaction);
+                const favor = ns.singularity.getFactionFavor(targetFaction);
                 const targetRep = favorToRep(ns.getFavorToDonate());
                 const currentRep =
-                    ns.getFactionRep(targetFaction) +
+                    ns.singularity.getFactionRep(targetFaction) +
                     (ns.getPlayer().currentWorkFactionName === targetFaction ? ns.getPlayer().workRepGained : 0);
                 const storedRep = Math.max(0, favorToRep(favor));
                 const targetRep15Percent = targetRep * 0.15;
@@ -223,7 +229,7 @@ export async function main(ns: NS): Promise<void> {
                 if (favor > ns.getFavorToDonate() && currentRep < targetAug.rep) {
                     const donateAmt = 1e6 * ((targetAug.rep - currentRep) / ns.getPlayer().faction_rep_mult);
                     if (donateAmt < ns.getPlayer().money) {
-                        ns.donateToFaction(targetFaction, donateAmt);
+                        ns.singularity.donateToFaction(targetFaction, donateAmt);
                         doInstall = true;
                     } else {
                         goalCost += donateAmt;
@@ -239,19 +245,13 @@ export async function main(ns: NS): Promise<void> {
 
             const port = ns.getPortHandle(2);
             port.clear();
-            port.write(
-                JSON.stringify([
-                    targetFaction,
-                    targetRepDisp,
-                    goalCost,
-                ])
-            );
+            port.write(JSON.stringify([targetFaction, targetRepDisp, goalCost]));
 
             break;
         }
 
         if (doInstall) {
-            ns.stopAction();
+            ns.singularity.stopAction();
 
             const baFlags = installNonHackAugs ? "-gn" : "-g";
             const mcpPID = ns.exec("buy_augs.js", "home", 1, baFlags);
@@ -267,17 +267,13 @@ export async function main(ns: NS): Promise<void> {
         }
 
         if (allInstalled) {
-            // if we have the red pill and we can hack the world daemon, ascend
-            if (ns.getHackingLevel() >= ns.getServerRequiredHackingLevel("w0r1d_d43m0n"))
-                ns.exec("ascend.js", "home", 1);
-
             // level up until we can hack the world daemon
             const srcFile11 = ns.getOwnedSourceFiles().find((x) => x.n === 11);
             const srcFile11Lvl = srcFile11 ? srcFile11.lvl : 0;
             const multmult = 1.9 * [1, 0.96, 0.94, 0.93][srcFile11Lvl];
 
-            let ngPrice = ns.getAugmentationPrice("NeuroFlux Governor");
-            let ngRepReq = ns.getAugmentationRepReq("NeuroFlux Governor");
+            let ngPrice = ns.singularity.getAugmentationPrice("NeuroFlux Governor");
+            let ngRepReq = ns.singularity.getAugmentationRepReq("NeuroFlux Governor");
             let total = 0;
             for (let i = 0; i < 10; i++) {
                 total += ngPrice;
@@ -296,7 +292,7 @@ export async function main(ns: NS): Promise<void> {
 
         doBuyAndSoftenAll(ns);
 
-        if (ns.getPlayer().money * 0.25 > ns.getUpgradeHomeRamCost()) ns.upgradeHomeRam();
+        if (ns.getPlayer().money * 0.25 > ns.singularity.getUpgradeHomeRamCost()) ns.singularity.upgradeHomeRam();
 
         if (ns.getPlayer().money < 1000000000 && doServerBuys) {
             const bsaPID = ns.exec("buy_server_all.js", "home", 1, "--allow", 0.5, "-qe");
@@ -325,6 +321,9 @@ export async function main(ns: NS): Promise<void> {
                 }
             }
         }
+
+        // if we have the red pill and we can hack the world daemon, ascend
+        if (ns.getHackingLevel() >= ns.getServerRequiredHackingLevel("w0r1d_d43m0n")) ns.exec("ascend.js", "home");
 
         await ns.sleep(100);
     }

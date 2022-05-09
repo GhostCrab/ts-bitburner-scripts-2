@@ -32,15 +32,15 @@ export async function main(ns: NS): Promise<void> {
     if (!options.a) {
         const player = ns.getPlayer();
 
-        const checkFactions = player.factions.concat(ns.checkFactionInvitations());
+        const checkFactions = player.factions.concat(ns.singularity.checkFactionInvitations());
         sortedFactions = checkFactions.sort(
             (a, b) =>
                 (ns.getPlayer().currentWorkFactionName === b ? ns.getPlayer().workRepGained : 0) +
-                ns.getFactionRep(b) -
-                ((ns.getPlayer().currentWorkFactionName === a ? ns.getPlayer().workRepGained : 0) + ns.getFactionRep(a))
+                ns.singularity.getFactionRep(b) -
+                ((ns.getPlayer().currentWorkFactionName === a ? ns.getPlayer().workRepGained : 0) + ns.singularity.getFactionRep(a))
         );
     } else {
-        sortedFactions = ALL_FACTIONS.sort((a, b) => ns.getFactionRep(b) - ns.getFactionRep(a));
+        sortedFactions = ALL_FACTIONS.sort((a, b) => ns.singularity.getFactionRep(b) - ns.singularity.getFactionRep(a));
     }
 
     sortedFactions = sortedFactions.filter((a) => a !== "Church of the Machine God");
@@ -49,7 +49,7 @@ export async function main(ns: NS): Promise<void> {
     let topFaction = true;
     for (const faction of sortedFactions) {
         const augs = ns
-            .getAugmentationsFromFaction(faction)
+            .singularity.getAugmentationsFromFaction(faction)
             .map((name) => {
                 return new Augmentation(ns, name, faction);
             })
@@ -70,7 +70,7 @@ export async function main(ns: NS): Promise<void> {
             "%s (rep: %d):",
             faction,
             (ns.getPlayer().currentWorkFactionName === faction ? ns.getPlayer().workRepGained : 0) +
-                ns.getFactionRep(faction)
+                ns.singularity.getFactionRep(faction)
         );
         for (const aug of augsToBuy) {
             ns.tprintf("  %s", aug);
@@ -139,7 +139,7 @@ export async function main(ns: NS): Promise<void> {
     }
     
     if (options.g) {
-        ns.stopAction();
+        ns.singularity.stopAction();
     }
 
     let mult = 1;
@@ -169,7 +169,7 @@ export async function main(ns: NS): Promise<void> {
     for (const aug of affordableAugs) {
         const depName = aug.dep;
         if (depName === "") continue;
-        if (ns.getOwnedAugmentations(true).includes(depName)) continue;
+        if (ns.singularity.getOwnedAugmentations(true).includes(depName)) continue;
 
         let depAug = affordableAugs.find((a) => a.name === depName);
         if (depAug === undefined) {
@@ -214,7 +214,7 @@ export async function main(ns: NS): Promise<void> {
     mult = 1;
     const startmoney = ns.getPlayer().money;
     for (const aug of affordableAugs) {
-        if (options.g) ns.purchaseAugmentation(aug.faction, aug.name);
+        if (options.g) ns.singularity.purchaseAugmentation(aug.faction, aug.name);
         ns.tprintf("%50s - %9s %s", aug.name, ns.nFormat(aug.price * mult, "$0.000a"), aug.dep);
         total += aug.price * mult;
         mult *= multmult;
@@ -237,16 +237,16 @@ export async function main(ns: NS): Promise<void> {
     const topFactionRep =
         topFactionForNeuroflux !== ""
             ? (ns.getPlayer().currentWorkFactionName === topFactionForNeuroflux ? ns.getPlayer().workRepGained : 0) +
-              ns.getFactionRep(topFactionForNeuroflux)
+              ns.singularity.getFactionRep(topFactionForNeuroflux)
             : 0;
-    let ngPrice = ns.getAugmentationPrice("NeuroFlux Governor") * (options.g ? 1 : mult);
-    let ngRepReq = ns.getAugmentationRepReq("NeuroFlux Governor");
+    let ngPrice = ns.singularity.getAugmentationPrice("NeuroFlux Governor") * (options.g ? 1 : mult);
+    let ngRepReq = ns.singularity.getAugmentationRepReq("NeuroFlux Governor");
     let nfCount = 1;
     let neuroError = false;
     while (true) {
         if (total + ngPrice < startmoney && ngRepReq <= topFactionRep) {
             if (options.g) {
-                const result = ns.purchaseAugmentation(topFactionForNeuroflux, "NeuroFlux Governor");
+                const result = ns.singularity.purchaseAugmentation(topFactionForNeuroflux, "NeuroFlux Governor");
                 if (!result) {
                     ns.tprintf("ERROR, could not buy Neuroflux governor");
                     neuroError = true;
@@ -275,7 +275,7 @@ export async function main(ns: NS): Promise<void> {
 
     const redPillAug = allPurchaseableAugs.find((a) => a.name === "The Red Pill");
     if (!neuroError && redPillAug) {
-        if (options.g) ns.purchaseAugmentation(redPillAug.faction, redPillAug.name);
+        if (options.g) ns.singularity.purchaseAugmentation(redPillAug.faction, redPillAug.name);
         ns.tprintf("%50s - %9s %s", "The Red Pill", ns.nFormat(0, "$0.000a"), ns.nFormat(redPillAug.rep, "0.000a"));
     }
 
@@ -286,7 +286,7 @@ export async function main(ns: NS): Promise<void> {
         const joinedFactions = ns.getPlayer().factions;
         let targetFaction = "";
         for (const faction of joinedFactions) {
-            if (ns.getFactionFavor(faction) >= ns.getFavorToDonate()) {
+            if (ns.singularity.getFactionFavor(faction) >= ns.getFavorToDonate()) {
                 targetFaction = faction;
                 break;
             }
@@ -299,20 +299,20 @@ export async function main(ns: NS): Promise<void> {
                 if (aug.price > ns.getPlayer().money) break;
 
                 if (aug.purchaseable) {
-                    if (ns.purchaseAugmentation(aug.faction, aug.name))
+                    if (ns.singularity.purchaseAugmentation(aug.faction, aug.name))
                         continue;
                     else
                         break;
                 }
 
-                const repDiff = aug.rep - ns.getFactionRep(targetFaction);
+                const repDiff = aug.rep - ns.singularity.getFactionRep(targetFaction);
                 const donateAmt = 1e6 * (repDiff / ns.getPlayer().faction_rep_mult);
 
                 if (donateAmt > ns.getPlayer().money) break;
-                ns.donateToFaction(targetFaction, donateAmt);
+                ns.singularity.donateToFaction(targetFaction, donateAmt);
 
                 if (aug.price > ns.getPlayer().money) break;
-                ns.purchaseAugmentation(aug.faction, aug.name);
+                ns.singularity.purchaseAugmentation(aug.faction, aug.name);
 
                 ns.tprintf(
                     "Donated %s for %d rep and paid %s for a level of NeuroFlux Governor",

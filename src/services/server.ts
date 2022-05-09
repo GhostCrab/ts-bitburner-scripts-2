@@ -90,12 +90,6 @@ export interface TextFile {
     text: string;
 }
 
-let options;
-const argsSchema: [string, string | number | boolean | string[]][] = [
-    ["help", false],
-    ["port", 7],
-];
-
 export function getScriptExecutionArg(args: Argument[], arg: string): Argument | undefined {
     const argIndex = args.findIndex((a) => a === arg);
     if (argIndex !== -1) return args[argIndex + 1];
@@ -119,33 +113,6 @@ function timingSearch(
     if (midMs > ms) return timingSearch(server, timingFunction, ms, mid, end, precision);
 
     return timingSearch(server, timingFunction, ms, start, mid, precision);
-}
-
-/** @param {NS} ns **/
-export async function main(ns: NS): Promise<void> {
-    ns.disableLog("asleep");
-    ns.disableLog("scan");
-    ns.clearLog();
-
-    options = ns.flags(argsSchema);
-    if (options.help) {
-        ns.tprint("Provide server information on a netscript port");
-        return;
-    }
-
-    const serverService = new ServerService(ns);
-    eval("window").serverService = serverService;
-    const portHandle = ns.getPortHandle(options.port);
-    portHandle.clear();
-    portHandle.write(serverService);
-    ns.atExit(() => {
-        portHandle.clear();
-        delete eval("window").serverService;
-    });
-    ns.print(`Started Server Service on port ${options.port}`);
-    while (true) {
-        await ns.asleep(60 * 60 * 1000);
-    }
 }
 
 type ServerDict = { [id: string]: Server };

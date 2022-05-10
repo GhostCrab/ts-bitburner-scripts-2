@@ -1,6 +1,6 @@
-import { NS } from '@ns'
+import { NS } from "@ns";
 
-export async function main(ns : NS) : Promise<void> {
+export async function main(ns: NS): Promise<void> {
     while (true) {
         if (ns.getServerMaxRam("home") >= 128) {
             ns.run("mcp.js");
@@ -19,5 +19,13 @@ export async function main(ns : NS) : Promise<void> {
         while (ns.getRunningScript(joinPID) !== null) await ns.sleep(100);
 
         ns.singularity.workForFaction("Tian Di Hui", "Hacking Contracts", true);
+
+        if (!ns.singularity.isFocused()) {
+            ns.singularity.createProgram("BruteSSH.exe", true) ||
+                ns.singularity.createProgram("FTPCrack.exe", true) ||
+                ns.singularity.createProgram("relaySMTP.exe", true) ||
+                ns.singularity.createProgram("HTTPWorm.exe", true) ||
+                ns.singularity.createProgram("SQLInject.exe", true);
+        }
     }
 }

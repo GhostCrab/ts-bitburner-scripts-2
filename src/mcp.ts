@@ -4,6 +4,7 @@ import { doBuyAndSoftenAll, getAugmentationPriceMultiplier } from "/lib/util";
 
 enum ControllerState {
     init = -1,
+    rep,
     hack,
     exp,
     join,
@@ -114,6 +115,7 @@ export async function main(ns: NS): Promise<void> {
     const storedRep = Math.max(0, favorToRep(favor));
     const donateRep = favorToRep(ns.getFavorToDonate());
     const donateRep15Percent = donateRep * 0.15;
+    let repPerSec = ns.getPlayer().workRepGainRate * 5;
 
     // update targetAug.rep to something managable
     if (favor < ns.getFavorToDonate() && targetAug.rep > favorToRep(ns.getFavorToDonate())) {
@@ -134,14 +136,22 @@ export async function main(ns: NS): Promise<void> {
     const port = ns.getPortHandle(2);
     port.clear();
     port.write(JSON.stringify([targetAug.faction, targetAug.rep, targetCash]));
-
     const stateInterval = setInterval(() => {
+        const runningScript = ns.getRunningScript(waitPID);
+
+        if (runningScript && state === CS.rep) {
+            repPerSec = ns.getPlayer().workRepGainRate * 5;
+        }
+
         // detect state transition
-        if (ns.getRunningScript(waitPID) === null) {
+        if (runningScript === null) {
             waitPID = 0;
             switch (state) {
                 case CS.init:
                 case CS.buying:
+                    state = CS.rep;
+                    break;
+                case CS.rep:
                     state = CS.hack;
                     break;
                 case CS.hack:
@@ -167,12 +177,39 @@ export async function main(ns: NS): Promise<void> {
         // if no processes are running, try to run one depending on the current state
         if (waitPID === 0) {
             const incomePerSec = ns.getScriptIncome(ns.getScriptName(), "home", ...ns.args);
-            const secondsToTargetCash = (targetCash - ns.getPlayer().money) / incomePerSec;
+            const secondsToTargetCash = incomePerSec > 0 ? (targetCash - ns.getPlayer().money) / incomePerSec : 0;
 
             switch (state) {
-                case CS.hack:
-                    waitPID = ns.exec("hack.js", "home", 1, "--limit", 10, "--rounds", 1);
+                case CS.rep:
+                    waitPID = ns.exec("share.js", "home", 1, "--reserve", 0, "--timer", 2.5);
                     break;
+                case CS.hack: {
+                    const currentRep =
+                        ns.singularity.getFactionRep(targetAug.faction) +
+                        (ns.getPlayer().currentWorkFactionName === targetAug.faction
+                            ? ns.getPlayer().workRepGained
+                            : 0);
+
+                    const secondsToTargetRep = repPerSec > 0 ? (targetAug.rep - currentRep) / repPerSec : 0;
+                    const maxTargetTime = Math.max(secondsToTargetCash, secondsToTargetRep, 10 * 60);
+
+                    if (targetCash - ns.getPlayer().money <= 0) {
+                        waitPID = ns.exec("hack.js", "home", 1, "--limit", maxTargetTime / 60, "--rounds", 1);
+                    } else {
+                        waitPID = ns.exec(
+                            "hack.js",
+                            "home",
+                            1,
+                            "--limit",
+                            maxTargetTime / 60,
+                            "--rounds",
+                            1,
+                            "--goal",
+                            targetCash - ns.getPlayer().money
+                        );
+                    }
+                    break;
+                }
                 case CS.exp:
                     doBuyAndSoftenAll(ns);
                     waitPID = ns.exec("exp.js", "home", 1, "--reserve", HOME_RESERVE_RAM, "--timer", 60);

@@ -80,7 +80,7 @@ export async function main(ns: NS): Promise<void> {
     options.allow = options.allow !== 1 ? options.allow : options.a;
     options.quiet = options.quiet || options.q;
     options.execute = options.execute || options.e;
-    options.reserve = options.reserve !== 0 ? options.reserve : options.o;
+    options.reserve = options.reserve ? options.reserve : options.o ? options.o : 0;
 
     let maxPow = 8; // Minimum ram is 256
     let sizes: [number, number, number][] = [];
@@ -121,9 +121,9 @@ export async function main(ns: NS): Promise<void> {
     if (!options.execute) {
         if (!options.quiet)
             ns.tprintf(
-                "Check: Buying %d %dGB servers, increasing the size from %d to %d for %s",
+                "Check: Buying %d %s servers, increasing the size from %d to %d for %s",
                 numServers,
-                ram,
+                ns.nFormat(ram * 1e9, "0b"),
                 currentSize,
                 finalSize,
                 ns.nFormat(numServers * ns.getPurchasedServerCost(ram), "($0.000a)")

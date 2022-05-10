@@ -241,6 +241,8 @@ function allocateBatches(
     const shortWeakenTime = targetServer.weakenTime(ns.getHackingLevel(), simPlayer);
     const hackTimeLong = targetServer.hackTime(Number.MIN_VALUE, simPlayer);
 
+    timeLimit = Math.min(timeLimit, shortWeakenTime * 2);
+
     // If we cant fit a single batch within the time limit, fail the allocation.
     if (shortWeakenTime + BATCHSPACER > timeLimit)
         return {
@@ -489,6 +491,7 @@ export async function main(ns: NS): Promise<void> {
 
         // reverse engineer hackOverride to tightly fit batch count
         const playerHackingLevel = ns.getHackingLevel();
+        targetServer.reload();
 
         const hackTimeTarget = batchCount * BATCHSPACER;
         const hackLevelCalc = targetServer.hackLevelForTime(hackTimeTarget, simPlayer);

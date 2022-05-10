@@ -1,33 +1,12 @@
 import { NS } from "@ns";
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const findProp = function (propName: string): any {
-    for (const div of eval("document").querySelectorAll("div")) {
-        const propKey = Object.keys(div)[1];
-        if (!propKey) continue;
-        const props = div[propKey];
-        if (props.children?.props && props.children.props[propName]) return props.children.props[propName];
-        if (props.children instanceof Array)
-            for (const child of props.children) if (child?.props && child.props[propName]) return child.props[propName];
-    }
-};
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let playerProp: any;
-
+import { permlog, stFormat } from "/lib/util";
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 export async function main(ns: NS): Promise<void> {
-    playerProp = findProp("player");
-    playerProp.giveExploit("Bypass");
-    playerProp.giveExploit("PrototypeTampering");
-    playerProp.giveExploit("Unclickable");
-    playerProp.giveExploit("UndocumentedFunctionCall");
-    playerProp.giveExploit("TimeCompression");
-    playerProp.giveExploit("RealityAlteration");
-    playerProp.giveExploit("N00dles");
-    playerProp.giveExploit("YoureNotMeantToAccessThis");
-    playerProp.giveExploit("TrueRecursion");
-    playerProp.giveExploit("INeedARainbow");
-    playerProp.giveExploit("EditSaveFile");
+    const augnames = ns.singularity.getAugmentationsFromFaction("BitRunners");
+    await permlog(ns, "Resetting after %s [%s since the start of BitNode %s]", stFormat(ns, ns.getPlayer().playtimeSinceLastAug), stFormat(ns, ns.getPlayer().playtimeSinceLastBitnode), ns.getPlayer().bitNodeN);
+    await permlog(ns, "%s (%d):", ns.getPlayer().factions[0], ns.singularity.getFactionRep(ns.getPlayer().factions[0]));
+    for (const augname of augnames) {
+        await permlog(ns, "  %s", augname);
+    }
 }

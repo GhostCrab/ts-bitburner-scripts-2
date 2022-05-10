@@ -11,7 +11,8 @@ export async function main(ns: NS): Promise<void> {
         "hack.js",
         "/lib/stanek/charge.js",
         "/archive/hack_2.js",
-        "controller.js"
+        "controller.js",
+        "mcp.js",
     ];
 
     const allHostnames = allHosts(ns);

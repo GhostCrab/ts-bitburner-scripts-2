@@ -2,14 +2,16 @@ import { NS } from "@ns";
 import { ServerService } from "/services/server";
 
 let options;
-const argsSchema: [string, string | number | boolean | string[]][] = [["reserve", Number.MAX_SAFE_INTEGER]];
+const argsSchema: [string, string | number | boolean | string[]][] = [
+    ["reserve", Number.MAX_SAFE_INTEGER],
+    ["timer", 0],
+];
 
 let serverService: ServerService;
 
 export async function main(ns: NS): Promise<void> {
     try {
         options = ns.flags(argsSchema);
-        //serverService = getServerService(ns);
         serverService = new ServerService(ns);
     } catch (e) {
         ns.tprintf("ERROR: %s", e);
@@ -28,12 +30,21 @@ export async function main(ns: NS): Promise<void> {
         await ns.scp("/lib/exec/const_weaken.js", "home", server.hostname);
     }
 
+    const pids: number[] = []
     for (const server of scriptableServers) {
         const availableRam = server.availableRam();
         const availableThreads = Math.floor(availableRam / ns.getScriptRam("/lib/exec/const_weaken.js"));
 
         if (availableThreads <= 0) continue;
 
-        ns.exec("/lib/exec/const_weaken.js", server.hostname, availableThreads, "--target", "joesguns");
+        pids.push(ns.exec("/lib/exec/const_weaken.js", server.hostname, availableThreads, "--target", "joesguns"));
+    }
+
+    if (options.timer) {
+        await ns.sleep(options.timer * 1000);
+
+        for (const pid of pids) {
+            ns.kill(pid);
+        }
     }
 }

@@ -10,6 +10,11 @@ export function llog(ns: NS, str: string, ...args: (string | number)[]): void {
     ns.printf("%8s " + str, new Date().toLocaleTimeString("it-IT"), ...args);
 }
 
+export async function permlog(ns: NS, str: string, ...args: (string | number)[]): void {
+    const outstr = ns.sprintf("%8s " + str, new Date().toLocaleTimeString("it-IT"), ...args);
+    await ns.write("log.txt", outstr + "\n", "a");
+}
+
 export function softenServer(ns: NS, hostname: string): boolean {
     try {
         ns.brutessh(hostname);
@@ -231,3 +236,21 @@ export const ALL_FACTIONS = [
     "Bladeburners",
     "Church of the Machine God",
 ];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function findProp(propName: string): any {
+    for (const div of eval("document").querySelectorAll("div")) {
+        const propKey = Object.keys(div)[1];
+        if (!propKey) continue;
+        const props = div[propKey];
+        if (props.children?.props && props.children.props[propName]) return props.children.props[propName];
+        if (props.children instanceof Array)
+            for (const child of props.children) if (child?.props && child.props[propName]) return child.props[propName];
+    }
+}
+
+export function getAugmentationPriceMultiplier(ns: NS): number {
+    const srcFile11 = ns.getOwnedSourceFiles().find((x) => x.n === 11);
+    const srcFile11Lvl = srcFile11 ? srcFile11.lvl : 0;
+    return 1.9 * [1, 0.96, 0.94, 0.93][srcFile11Lvl];
+}

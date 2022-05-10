@@ -159,8 +159,8 @@ export async function main(ns: NS): Promise<void> {
 
             let targetRepDisp = targetAug.rep;
 
-            const augs = ns
-                .singularity.getAugmentationsFromFaction(targetFaction)
+            const augs = ns.singularity
+                .getAugmentationsFromFaction(targetFaction)
                 .map((name) => {
                     return new Augmentation(ns, name, targetFaction);
                 })
@@ -178,7 +178,8 @@ export async function main(ns: NS): Promise<void> {
 
             let overrideDoInstall = false;
             allInstalled = false;
-            if (ns.singularity.checkFactionInvitations().includes(targetFaction)) ns.singularity.joinFaction(targetFaction);
+            if (ns.singularity.checkFactionInvitations().includes(targetFaction))
+                ns.singularity.joinFaction(targetFaction);
             ns.singularity.workForFaction(targetFaction, "Hacking Contracts", true);
 
             if (targetAug.purchaseable) doInstall = true;

@@ -3,7 +3,7 @@ import { NS } from '@ns'
 export async function main(ns : NS) : Promise<void> {
     while (true) {
         if (ns.getServerMaxRam("home") >= 128) {
-            ns.run("controller.js");
+            ns.run("mcp.js");
             break;
         }
 

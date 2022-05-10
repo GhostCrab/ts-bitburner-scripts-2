@@ -108,7 +108,6 @@ export async function main(ns: NS): Promise<void> {
     let state = CS.init;
     let waitPID = 0;
     let doExp = true;
-    let doServerBuys = true;
     const [targetAug, installNonHackAugs] = getTargetAug(ns);
     let targetCash = getTargetCash(ns, targetAug);
     const favor = ns.singularity.getFactionFavor(targetAug.faction);
@@ -167,6 +166,9 @@ export async function main(ns: NS): Promise<void> {
 
         // if no processes are running, try to run one depending on the current state
         if (waitPID === 0) {
+            const incomePerSec = ns.getScriptIncome(ns.getScriptName(), "home", ...ns.args);
+            const secondsToTargetCash = (targetCash - ns.getPlayer().money) / incomePerSec;
+
             switch (state) {
                 case CS.hack:
                     waitPID = ns.exec("hack.js", "home", 1, "--limit", 10, "--rounds", 1);
@@ -182,14 +184,18 @@ export async function main(ns: NS): Promise<void> {
                     if (ns.getPlayer().factions.length > 0) waitPID = ns.exec("cct.js", "home", 1);
                     break;
                 case CS.buying:
-                    if (ns.getPlayer().money * 0.25 > ns.singularity.getUpgradeHomeRamCost())
-                        ns.singularity.upgradeHomeRam();
+                    if (secondsToTargetCash > 20 * 60) {
+                        if (ns.getPlayer().money > ns.singularity.getUpgradeHomeRamCost())
+                            ns.singularity.upgradeHomeRam();
 
-                    if (ns.getPlayer().money < 1000000000 && doServerBuys) {
-                        waitPID = ns.exec("buy_server_all.js", "home", 1, "--allow", 0.5, "-qe");
+                        waitPID = ns.exec("buy_server_all.js", "home", 1, "-qe");
                     } else {
-                        waitPID = ns.exec("buy_server_all.js", "home", 1, "--allow", 0.1, "-qe");
+                        if (ns.getPlayer().money - targetCash > ns.singularity.getUpgradeHomeRamCost())
+                            ns.singularity.upgradeHomeRam();
+
+                        waitPID = ns.exec("buy_server_all.js", "home", 1, "--reserve", targetCash, "-qe");
                     }
+
                     break;
             }
         }
@@ -200,11 +206,12 @@ export async function main(ns: NS): Promise<void> {
             ns.singularity.getFactionRep(targetAug.faction) +
             (ns.getPlayer().currentWorkFactionName === targetAug.faction ? ns.getPlayer().workRepGained : 0);
 
-        // If we have enough rep, but not enough cash, restrict server buying
-        if (currentRep >= targetAug.rep && ns.getPlayer().money < targetCash) doServerBuys = false;
-
         // If we have the red pill and we can hack the world daemon, ascend
-        if (ns.getHackingLevel() >= ns.getServerRequiredHackingLevel("w0r1d_d43m0n")) ns.exec("ascend.js", "home");
+        if (
+            ns.getHackingLevel() >= ns.getServerRequiredHackingLevel("w0r1d_d43m0n") &&
+            ns.singularity.getOwnedAugmentations().includes("The Red Pill")
+        )
+            ns.exec("ascend.js", "home");
 
         // If we havent joined the target faction yet, try to join it and get to work
         if (ns.singularity.checkFactionInvitations().includes(targetAug.faction)) {

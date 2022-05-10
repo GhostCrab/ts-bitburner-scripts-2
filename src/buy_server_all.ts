@@ -4,11 +4,13 @@ import { NS } from "@ns";
 let options: any;
 const argsSchema: [string, string | number | boolean | string[]][] = [
     ["allow", 1],
+    ["reserve", 0],
     ["quiet", false],
     ["execute", false],
     ["a", 1],
     ["q", false],
-    ["e", false]
+    ["e", false],
+    ["r", 0],
 ];
 
 // returns the actual number of servers to buy that would be better than the ones we already have
@@ -78,10 +80,11 @@ export async function main(ns: NS): Promise<void> {
     options.allow = options.allow !== 1 ? options.allow : options.a;
     options.quiet = options.quiet || options.q;
     options.execute = options.execute || options.e;
+    options.reserve = options.reserve !== 0 ? options.reserve : options.o;
 
     let maxPow = 8; // Minimum ram is 256
     let sizes: [number, number, number][] = [];
-    const cash = ns.getPlayer().money * options.allow;
+    const cash = (ns.getPlayer().money - options.reserve) * options.allow;
 
     if (cash < 0) return;
     const currentSize = getCurrentRamSize(ns);

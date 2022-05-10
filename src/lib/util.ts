@@ -10,7 +10,7 @@ export function llog(ns: NS, str: string, ...args: (string | number)[]): void {
     ns.printf("%8s " + str, new Date().toLocaleTimeString("it-IT"), ...args);
 }
 
-export async function permlog(ns: NS, str: string, ...args: (string | number)[]): void {
+export async function permlog(ns: NS, str: string, ...args: (string | number)[]): Promise<void> {
     const outstr = ns.sprintf("%8s " + str, new Date().toLocaleTimeString("it-IT"), ...args);
     await ns.write("log.txt", outstr + "\n", "a");
 }

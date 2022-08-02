@@ -256,6 +256,10 @@ export async function main(ns: NS): Promise<void> {
             ns.singularity.workForFaction(targetAug.faction, "Hacking Contracts", true);
         }
 
+        if (ns.getPlayer().currentWorkFactionName !== targetAug.faction) {
+            ns.singularity.workForFaction(targetAug.faction, "Hacking Contracts", true);
+        }
+
         // Check to see if we can install augs and reset
         if ((favor >= ns.getFavorToDonate() || currentRep >= targetAug.rep) && ns.getPlayer().money >= targetCash) {
             clearInterval(stateInterval);

@@ -305,7 +305,6 @@ export async function main(ns: NS): Promise<void> {
                 let wholeValue = Math.floor(nvalue);
 
                 if (wholeValue > 100) {
-                    factionPort.clear();
                     transform = 0;
                     wholeValue = 100;
                 }

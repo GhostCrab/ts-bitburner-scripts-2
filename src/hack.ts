@@ -720,9 +720,8 @@ async function getBestTarget(ns: NS, servers: Server[]): Promise<Server | undefi
             await ns.sleep(10);
         }
 
-        // the hub 29.6m/s
         targetIncomes = targetIncomes.sort((a, b) => b[1] - a[1]);
-        // targetIncomes.forEach((a) => ns.tprintf("%20s: %s/s", a[0].hostname, ns.nFormat(a[1], "$0.000a")));
+        //targetIncomes.forEach((a) => ns.tprintf("%20s: %s/s", a[0].hostname, ns.nFormat(a[1], "$0.000a")));
 
         targetServer = targetIncomes[0][0];
     } else {

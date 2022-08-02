@@ -1,6 +1,11 @@
 import { NS } from "@ns";
 
 export async function main(ns: NS): Promise<void> {
+    const softenPID = ns.exec("soften.js", "home");
+    while (ns.getRunningScript(softenPID) !== null) await ns.sleep(100);
+
+    ns.exec("clock.js", "home");
+
     while (true) {
         if (ns.getServerMaxRam("home") >= 128) {
             ns.run("mcp.js");
